@@ -66,8 +66,14 @@ const rtxt=r=>r.reason==='Other'?'Other: '+(r.reason_other||''):(r.reason||(r.la
 function toast(m,t='n'){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;$('#toasts').append(e);setTimeout(()=>e.remove(),4000)}
 function modal(h){$('#mbody').innerHTML=h;$('#modal').style.display='flex'}function closeM(){$('#modal').style.display='none'}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeM()};
+function ask(o){return new Promise(res=>{const inp=o.input!==undefined;
+ modal(`<h3 style="margin:0 0 8px;font-size:18px">${esc(o.title)}</h3><p style="color:var(--mu);margin:0 0 ${inp?10:20}px">${esc(o.msg||'')}</p>${inp?`<input id="askin" value="${esc(o.input)}" style="margin-bottom:20px">`:''}<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn s" id="ask-no">Cancel</button><button class="btn ${o.danger?'d':''}" id="ask-ok">${esc(o.ok||'OK')}</button></div>`);
+ const done=v=>{$('#modal').onclick=e=>{if(e.target.id==='modal')closeM()};closeM();res(v)};
+ $('#ask-no').onclick=()=>done(null);$('#ask-ok').onclick=()=>done(inp?$('#askin').value:true);
+ $('#modal').onclick=e=>{if(e.target.id==='modal')done(null)};
+ if(inp){const i=$('#askin');i.focus();i.onkeydown=e=>{if(e.key==='Enter')$('#ask-ok').click()}}})}
 async function copy(t,l='Copied'){try{await navigator.clipboard.writeText(t)}catch{const a=document.createElement('textarea');a.value=t;document.body.append(a);a.select();document.execCommand('copy');a.remove()}toast(l,'o')}
-function csv(rows,name){if(!rows.length)return toast('Nothing to export','e');if(!confirm('This export contains plain-text UIDs and passwords. Store it securely. Continue?'))return;
+async function csv(rows,name){if(!rows.length)return toast('Nothing to export','e');if(!(await ask({title:'Export sensitive data?',msg:'This export contains plain-text UIDs and passwords. Store the file securely.',ok:'Export'})))return;
  const H=['File Name','Team Lead','Assignment Date','Person Number','UID','Password','Reason','Response','Last Updated'];
  const q=v=>{v=String(v??'');if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
  const b=new Blob(['\ufeff'+[H,...rows.map(r=>[r.file,r.tl,r.date,r.person,r.uid,r.password,r.reason,r.remarks,r.last])].map(l=>l.map(q).join(',')).join('\r\n')],{type:'text/csv'});
@@ -130,8 +136,8 @@ function draw(){if(!$('#tbl'))return;const q=S.q.toLowerCase();
  const n=Math.max(1,Math.ceil(l.length/10));S.page=Math.min(S.page,n);$('#tbl').innerHTML=ftable(l.slice((S.page-1)*10,S.page*10));
  $('#pg').innerHTML=`<span>${l.length} files</span><button class="btn s sm" ${S.page<2?'disabled':''} onclick="S.page--;draw()">Prev</button> ${S.page}/${n} <button class="btn s sm" ${S.page>=n?'disabled':''} onclick="S.page++;draw()">Next</button>`}
 async function delFile(id){const f=files.find(x=>x.id===id);if(!f)return;
- if(!confirm(`Permanently delete "${f.file_name}" with all ${f.total} IDs and their update history? This cannot be undone.`))return;
- const t=prompt('Type DELETE to confirm');if(t!=='DELETE')return toast('Delete cancelled');
+ if(!(await ask({title:'Delete file?',msg:`"${f.file_name}" and all ${f.total} IDs with their update history will be permanently deleted. This cannot be undone.`,ok:'Delete',danger:true})))return;
+ 
  const{data,error}=await sb.from('files').delete().eq('id',id).select('id');
  if(error||!data?.length)return toast(error?.message||'Not permitted','e');toast('File deleted','o');curTL?tlFiles(curTL):go(view)}
 async function archive(id){if(!confirm('Archive this file? It will be hidden from lists (data is kept).'))return;
@@ -215,8 +221,8 @@ async function tlFiles(id){const p=TLP.find(x=>x.id===id);if(!p)return;const nm=
  document.querySelectorAll('#side a').forEach(a=>a.classList.toggle('on',a.dataset.k==='tls'));$('#main').innerHTML='<div class="empty">Loading…</div>';
  if(!(await fetchFiles()))return;S={...S,q:'',st:'',from:'',to:'',tl:nm,page:1};pFiles('files');
  $('.top h1').textContent='Files of '+nm;$('.top>div:last-child').innerHTML='<button class="btn s" onclick="go(\'tls\')">← Team Leads</button>'}
-async function setActive(id,v){if(!confirm(v?'Activate this user?':'Deactivate this user? They will lose access immediately.'))return;const{data,error}=await sb.from('profiles').update({active:v}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
-async function rename(id,n){const v=prompt('Full name',n);if(v===null)return;const{data,error}=await sb.from('profiles').update({full_name:v.trim()}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
+async function setActive(id,v){if(!(await ask({title:v?'Activate user?':'Deactivate user?',msg:v?'They will be able to log in again.':'They will lose access immediately.',ok:v?'Activate':'Deactivate',danger:!v})))return;const{data,error}=await sb.from('profiles').update({active:v}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
+async function rename(id,n){const v=await ask({title:'Rename Team Lead',msg:'Full name',input:n,ok:'Save'});if(v===null)return;const{data,error}=await sb.from('profiles').update({full_name:v.trim()}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
 function pProfile(){$('#main').innerHTML=hdr(isA()?'Settings':'Profile')+`<div class="panel" style="max-width:420px"><p><b>${esc(me.full_name||'-')}</b><br>${esc(me.email)}<br>Role: ${isA()?'Admin':'Team Lead'}</p>
  <label>New password</label><input id="np" type="password" autocomplete="new-password"><p><button class="btn" onclick="chpw()">Change password</button></p></div>`}
 async function chpw(){const p=$('#np').value;if(p.length<8)return toast('Use at least 8 characters','e');const{error}=await sb.auth.updateUser({password:p});if(error)return toast(error.message,'e');$('#np').value='';toast('Password changed','o')}
