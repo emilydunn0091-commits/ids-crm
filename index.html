@@ -112,7 +112,7 @@ function ftable(list){if(!list.length)return'<div class="empty">No files found.<
  const th=(k,l)=>`<th onclick="sortBy('${k}')">${l}${S.sort===k?(S.dir>0?' ▲':' ▼'):''}</th>`;
  return`<table><tr>${th('file_name','File')}${isA()?th('tlname','Team Lead'):''}${th('received_from','Received From')}${th('assigned_to','Assigned To')}${th('assignment_date','Date')}${th('total','Total')}${th('upd','Updated')}${th('pend','Pending')}${th('last','Last Updated')}<th>Status</th><th>Actions</th></tr>`+
  list.map(f=>`<tr><td>${esc(f.file_name)}</td>${isA()?`<td>${esc(f.tlname)}</td>`:''}<td>${esc(f.received_from)}</td><td>${esc(f.assigned_to)}</td><td>${f.assignment_date}</td><td>${f.total}</td><td>${f.upd}</td><td>${f.pend}</td><td>${fmt(f.last)}</td><td><span class="tag ${f.st}">${f.st.replace('-',' ')}</span></td>
- <td><button class="btn s sm" onclick="openFile('${f.id}',false)">Open File</button> <button class="btn sm" onclick="openFile('${f.id}',true)">Update IDs</button> <button class="btn s sm" onclick="archive('${f.id}')">Archive</button></td></tr>`).join('')+'</table>'}
+ <td><button class="btn s sm" onclick="openFile('${f.id}',false)">Open File</button> <button class="btn sm" onclick="openFile('${f.id}',true)">Update IDs</button> <button class="btn s sm" onclick="archive('${f.id}')">Archive</button>${isA()?` <button class="btn d sm" onclick="delFile('${f.id}')">Delete</button>`:''}</td></tr>`).join('')+'</table>'}
 function sortBy(k){S.dir=S.sort===k?-S.dir:1;S.sort=k;draw()}
 function setS(k,v){S[k]=v;S.page=1;draw()}
 let daily=false;
@@ -129,6 +129,11 @@ function draw(){if(!$('#tbl'))return;const q=S.q.toLowerCase();
  l.sort((a,b)=>{const x=a[S.sort]??'',y=b[S.sort]??'';return(x>y?1:x<y?-1:0)*S.dir});
  const n=Math.max(1,Math.ceil(l.length/10));S.page=Math.min(S.page,n);$('#tbl').innerHTML=ftable(l.slice((S.page-1)*10,S.page*10));
  $('#pg').innerHTML=`<span>${l.length} files</span><button class="btn s sm" ${S.page<2?'disabled':''} onclick="S.page--;draw()">Prev</button> ${S.page}/${n} <button class="btn s sm" ${S.page>=n?'disabled':''} onclick="S.page++;draw()">Next</button>`}
+async function delFile(id){const f=files.find(x=>x.id===id);if(!f)return;
+ if(!confirm(`Permanently delete "${f.file_name}" with all ${f.total} IDs and their update history? This cannot be undone.`))return;
+ const t=prompt('Type DELETE to confirm');if(t!=='DELETE')return toast('Delete cancelled');
+ const{data,error}=await sb.from('files').delete().eq('id',id).select('id');
+ if(error||!data?.length)return toast(error?.message||'Not permitted','e');toast('File deleted','o');curTL?tlFiles(curTL):go(view)}
 async function archive(id){if(!confirm('Archive this file? It will be hidden from lists (data is kept).'))return;
  const{data,error}=await sb.from('files').update({archived:true}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Not permitted','e');toast('File archived','o');go(view)}
 // ---- add file
