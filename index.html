@@ -81,7 +81,7 @@ async function go(v,arg){view=v;document.querySelectorAll('#side a').forEach(a=>
  if(v==='records')return pRecords();
  if(!(await fetchFiles()))return m.innerHTML='<div class="empty">Could not load data.</div>';
  ({dash:pDash,files:()=>pFiles('files'),daily:()=>pFiles('daily'),reports:pReports,tls:pTLs})[v]()}
-const top=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" onclick="$('#side').classList.toggle('open')">☰</button> <h1 style="display:inline">${t}</h1></div><div>${x}</div></div>`;
+const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" onclick="$('#side').classList.toggle('open')">☰</button> <h1 style="display:inline">${t}</h1></div><div>${x}</div></div>`;
 // ---- dashboard
 async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records);let c;
  const by={};R.forEach(r=>by[r]=0);let none=0;rs.forEach(r=>r.reason?by[r.reason]++:none++);
@@ -90,7 +90,7 @@ async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records)
  else c=[[act.length,'Total Files'],[rs.length,'Total IDs Assigned'],[act.filter(f=>!f.today).length,'Files Pending Update Today'],[act.filter(f=>f.today).length,'Files Updated Today']];
  let ex='';if(isA()){const d={};act.forEach(f=>d[f.assignment_date]=(d[f.assignment_date]||0)+1);
   ex=`<div class="panel"><b>Files received per day (latest 7)</b><div class="tw"><table><tr><th>Date</th><th>Files</th></tr>${Object.entries(d).sort().reverse().slice(0,7).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan=2>No data</td></tr>'}</table></div></div>`}
- $('#main').innerHTML=top('Dashboard',isA()?'':'<button class="btn" onclick="go(\'add\')">+ Add New File</button>')+
+ $('#main').innerHTML=hdr('Dashboard',isA()?'':'<button class="btn" onclick="go(\'add\')">+ Add New File</button>')+
  `<div class="cards">${c.map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
  <div class="panel"><b>IDs by status</b><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${none}</b><span>Not updated yet</span></div></div></div>${ex}
  <h3>Recently updated files</h3><div class="panel"><div class="tw">${ftable([...act].filter(f=>f.last).sort((a,b)=>b.last.localeCompare(a.last)).slice(0,5))}</div></div>`}
@@ -104,7 +104,7 @@ function sortBy(k){S.dir=S.sort===k?-S.dir:1;S.sort=k;draw()}
 function setS(k,v){S[k]=v;S.page=1;draw()}
 let daily=false;
 function pFiles(mode){daily=mode==='daily';const tls=[...new Set(files.map(f=>f.tlname))].sort();
- $('#main').innerHTML=top(daily?'Daily Updates':isA()?'All Files':'My Files',isA()?'':'<button class="btn" onclick="go(\'add\')">+ Add New File</button>')+
+ $('#main').innerHTML=hdr(daily?'Daily Updates':isA()?'All Files':'My Files',isA()?'':'<button class="btn" onclick="go(\'add\')">+ Add New File</button>')+
  `<div class="panel"><div class="bar"><input placeholder="Search file, sender, assignee…" value="${esc(S.q)}" oninput="clearTimeout(window._t);window._t=setTimeout(()=>setS('q',this.value),250)">
  ${isA()?`<select onchange="setS('tl',this.value)"><option value="">All Team Leads</option>${tls.map(t=>`<option ${S.tl===t?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}
  <select onchange="setS('st',this.value)"><option value="">All statuses</option>${['Pending','In-Progress','Completed'].map(s=>`<option value="${s}" ${S.st===s?'selected':''}>${s.replace('-',' ')}</option>`).join('')}</select>
@@ -119,7 +119,7 @@ function draw(){if(!$('#tbl'))return;const q=S.q.toLowerCase();
 async function archive(id){if(!confirm('Archive this file? It will be hidden from lists (data is kept).'))return;
  const{data,error}=await sb.from('files').update({archived:true}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Not permitted','e');toast('File archived','o');go(view)}
 // ---- add file
-function pAdd(){$('#main').innerHTML=top('Add New File')+`<div class="panel" style="max-width:640px"><div class="g2"><div><label>File Name *</label><input id="a1"></div><div><label>Received From *</label><input id="a2"></div>
+function pAdd(){$('#main').innerHTML=hdr('Add New File')+`<div class="panel" style="max-width:640px"><div class="g2"><div><label>File Name *</label><input id="a1"></div><div><label>Received From *</label><input id="a2"></div>
  <div><label>Assigned To *</label><input id="a3"></div><div><label>Assignment Date *</label><input id="a4" type="date" value="${today()}"></div><div><label>Total Number of IDs *</label><input id="a5" type="number" min="1" max="500"></div></div>
  <label>Notes (optional)</label><textarea id="a6" rows="3"></textarea><p><button class="btn" id="asave" onclick="addFile()">Create File</button></p></div>`}
 async function addFile(){const v=i=>$('#a'+i).value.trim(),n=parseInt(v(5),10);
@@ -131,7 +131,7 @@ async function openFile(id,edit){view='file';const m=$('#main');m.innerHTML='<di
  const[a,b]=await Promise.all([sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email)').eq('id',id).single(),sb.from('id_records').select('*').eq('file_id',id).order('person_number')]);
  if(a.error||b.error)return m.innerHTML=`<div class="empty">${esc((a.error||b.error).message)}</div>`;
  const f=a.data,rs=b.data,tl=f.tl?.full_name||f.tl?.email||'-',dis=edit?'':'disabled';window._rs=rs;window._f=f;window._tl=tl;
- m.innerHTML=top(esc(f.file_name),`<button class="btn s" onclick="go('files')">← Back</button> ${edit?'':`<button class="btn" onclick="openFile('${id}',true)">Update IDs</button>`}`)+
+ m.innerHTML=hdr(esc(f.file_name),`<button class="btn s" onclick="go('files')">← Back</button> ${edit?'':`<button class="btn" onclick="openFile('${id}',true)">Update IDs</button>`}`)+
  `<div class="panel">Team Lead: <b>${esc(tl)}</b> · Received from: <b>${esc(f.received_from)}</b> · Assigned to: <b>${esc(f.assigned_to)}</b> · Date: <b>${f.assignment_date}</b> · IDs: <b>${rs.length}</b>${f.notes?`<br><span style="color:var(--mu)">${esc(f.notes)}</span>`:''}
  <div style="margin-top:10px"><button class="btn s sm" onclick="copyAll()">Copy all (Excel)</button> <button class="btn s sm" onclick="csv(fileRows(),'file')">Export CSV</button></div></div>
  <div class="panel"><div class="tw"><table><tr><th>Person</th><th>UID / ID</th><th>Password</th><th>Reason / Status</th><th>Remarks</th><th>Last Updated</th><th>Copy</th></tr>`+
@@ -165,7 +165,7 @@ async function pRecords(){const m=$('#main');let all=[],from=0;
   if(error)return m.innerHTML=`<div class="empty">${esc(error.message)}</div>`;all=all.concat(data);if(data.length<1000)break;from+=1000}
  RC=all.map(r=>({file:r.f.file_name,tl:r.f.tl?.full_name||r.f.tl?.email||'-',date:r.f.assignment_date,person:r.person_number,uid:r.uid||'',password:r.password||'',reason:rtxt(r),rk:r.reason||'',remarks:r.remarks||'',last:fmt(r.last_updated),ld:r.last_updated}));
  const tls=[...new Set(RC.map(r=>r.tl))].sort();
- m.innerHTML=top('ID Records','<button class="btn s" onclick="csv(RV(),\'records\')">Export filtered CSV</button>')+`<div class="panel"><div class="bar"><input placeholder="Search file name or UID" oninput="RF.q=this.value;rdraw()">
+ m.innerHTML=hdr('ID Records','<button class="btn s" onclick="csv(RV(),\'records\')">Export filtered CSV</button>')+`<div class="panel"><div class="bar"><input placeholder="Search file name or UID" oninput="RF.q=this.value;rdraw()">
  ${isA()?`<select onchange="RF.tl=this.value;rdraw()"><option value="">All Team Leads</option>${tls.map(t=>`<option>${esc(t)}</option>`).join('')}</select>`:''}
  <select onchange="RF.reason=this.value;rdraw()"><option value="">All reasons</option><option value="_none">Not updated</option>${R.map(x=>`<option>${x}</option>`).join('')}</select>
  <input type="date" onchange="RF.from=this.value;rdraw()"><input type="date" onchange="RF.to=this.value;rdraw()"></div><div class="tw" id="rt"></div></div>`;RF={q:'',reason:'',tl:'',from:'',to:''};rdraw()}
@@ -174,7 +174,7 @@ function rdraw(){const l=RV(),s=l.slice(0,300);$('#rt').innerHTML=l.length?`<tab
  <td><button class="btn s sm" onclick="copy(RV()[${i}].uid,'UID copied')">UID</button> <button class="btn s sm" onclick="copy(RV()[${i}].password,'Password copied')">Pass</button></td></tr>`).join('')}</table>${l.length>300?`<p style="color:var(--mu)">Showing first 300 of ${l.length}. Use filters or export.</p>`:`<p style="color:var(--mu)">${l.length} records</p>`}`:'<div class="empty">No records match.</div>'}
 // ---- reports
 function pReports(){const tls=[...new Set(files.map(f=>f.tlname))].sort();
- $('#main').innerHTML=top(isA()?'Daily & Monthly Reports':'Reports')+`<div class="panel"><div class="bar">${isA()?`<select onchange="RP.tl=this.value;rep()"><option value="">All Team Leads</option>${tls.map(t=>`<option ${RP.tl===t?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}
+ $('#main').innerHTML=hdr(isA()?'Daily & Monthly Reports':'Reports')+`<div class="panel"><div class="bar">${isA()?`<select onchange="RP.tl=this.value;rep()"><option value="">All Team Leads</option>${tls.map(t=>`<option ${RP.tl===t?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}
  <input type="date" value="${RP.from}" onchange="RP.from=this.value;rep()"><input type="date" value="${RP.to}" onchange="RP.to=this.value;rep()"></div></div><div id="rep"></div>`;rep()}
 function rep(){const fl=files.filter(f=>(!RP.tl||f.tlname===RP.tl)&&(!RP.from||f.assignment_date>=RP.from)&&(!RP.to||f.assignment_date<=RP.to));
  const tb=(h,rows)=>`<div class="panel tw"><table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${h.length}">No data</td></tr>`}</table></div>`;
@@ -189,12 +189,12 @@ function rep(){const fl=files.filter(f=>(!RP.tl||f.tlname===RP.tl)&&(!RP.from||f
  <h3>Monthly summary</h3>${tb(['Month','Files assigned','IDs assigned','IDs updated'],[...new Set([...fl.map(f=>f.assignment_date.slice(0,7)),...upd.map(r=>ld(r.last_updated).slice(0,7))])].sort().reverse().map(k=>[k,fl.filter(f=>f.assignment_date.startsWith(k)).length,fl.filter(f=>f.assignment_date.startsWith(k)).reduce((s,f)=>s+f.total,0),upd.filter(r=>ld(r.last_updated).startsWith(k)).length]))}`}
 // ---- team leads / profile
 async function pTLs(){const{data,error}=await sb.from('profiles').select('*').order('created_at');if(error)return toast(error.message,'e');
- $('#main').innerHTML=top('Team Leads')+`<div class="panel tw"><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Files</th><th>IDs</th><th>Active</th><th></th></tr>${data.map(p=>{const fl=files.filter(f=>f.team_lead_id===p.id);
+ $('#main').innerHTML=hdr('Team Leads')+`<div class="panel tw"><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Files</th><th>IDs</th><th>Active</th><th></th></tr>${data.map(p=>{const fl=files.filter(f=>f.team_lead_id===p.id);
  return`<tr><td>${esc(p.full_name)||'-'}</td><td>${esc(p.email)}</td><td>${p.role}</td><td>${fl.length}</td><td>${fl.reduce((s,f)=>s+f.total,0)}</td><td>${p.active?'Yes':'No'}</td><td>${p.id===me.id?'':`<button class="btn s sm" onclick="setActive('${p.id}',${!p.active})">${p.active?'Deactivate':'Activate'}</button> <button class="btn s sm" onclick="rename('${p.id}','${esc(p.full_name).replace(/'/g,'')}')">Rename</button>`}</td></tr>`}).join('')}</table></div>
  <p style="color:var(--mu)">New Team Leads are created in Supabase Authentication > Users (see README), then appear here.</p>`}
 async function setActive(id,v){if(!confirm(v?'Activate this user?':'Deactivate this user? They will lose access immediately.'))return;const{data,error}=await sb.from('profiles').update({active:v}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
 async function rename(id,n){const v=prompt('Full name',n);if(v===null)return;const{data,error}=await sb.from('profiles').update({full_name:v.trim()}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
-function pProfile(){$('#main').innerHTML=top(isA()?'Settings':'Profile')+`<div class="panel" style="max-width:420px"><p><b>${esc(me.full_name||'-')}</b><br>${esc(me.email)}<br>Role: ${isA()?'Admin':'Team Lead'}</p>
+function pProfile(){$('#main').innerHTML=hdr(isA()?'Settings':'Profile')+`<div class="panel" style="max-width:420px"><p><b>${esc(me.full_name||'-')}</b><br>${esc(me.email)}<br>Role: ${isA()?'Admin':'Team Lead'}</p>
  <label>New password</label><input id="np" type="password" autocomplete="new-password"><p><button class="btn" onclick="chpw()">Change password</button></p></div>`}
 async function chpw(){const p=$('#np').value;if(p.length<8)return toast('Use at least 8 characters','e');const{error}=await sb.auth.updateUser({password:p});if(error)return toast(error.message,'e');$('#np').value='';toast('Password changed','o')}
 boot();
