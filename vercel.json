@@ -1,1 +1,1 @@
-{ "buildCommand": "node build.js", "outputDirectory": "public", "cleanUrls": true }
+   { "buildCommand": "echo skip", "outputDirectory": "public", "cleanUrls": true }
