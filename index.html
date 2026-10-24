@@ -112,7 +112,7 @@ function ftable(list){if(!list.length)return'<div class="empty">No files found.<
  const th=(k,l)=>`<th onclick="sortBy('${k}')">${l}${S.sort===k?(S.dir>0?' ▲':' ▼'):''}</th>`;
  return`<table><tr>${th('file_name','File')}${isA()?th('tlname','Team Lead'):''}${th('received_from','Received From')}${th('assigned_to','Assigned To')}${th('assignment_date','Date')}${th('total','Total')}${th('upd','Updated')}${th('pend','Pending')}${th('last','Last Updated')}<th>Status</th><th>Actions</th></tr>`+
  list.map(f=>`<tr><td>${esc(f.file_name)}</td>${isA()?`<td>${esc(f.tlname)}</td>`:''}<td>${esc(f.received_from)}</td><td>${esc(f.assigned_to)}</td><td>${f.assignment_date}</td><td>${f.total}</td><td>${f.upd}</td><td>${f.pend}</td><td>${fmt(f.last)}</td><td><span class="tag ${f.st}">${f.st.replace('-',' ')}</span></td>
- <td><button class="btn s sm" onclick="openFile('${f.id}',false)">Open File</button> <button class="btn sm" onclick="openFile('${f.id}',true)">Update IDs</button> <button class="btn s sm" onclick="archive('${f.id}')">Archive</button>${isA()?` <button class="btn d sm" onclick="delFile('${f.id}')">Delete</button>`:''}</td></tr>`).join('')+'</table>'}
+ <td><button class="btn s sm" onclick="openFile('${f.id}',false)">Open File</button> <button class="btn sm" onclick="openFile('${f.id}',true)">Update IDs</button> <button class="btn d sm" onclick="delFile('${f.id}')">Delete</button></td></tr>`).join('')+'</table>'}
 function sortBy(k){S.dir=S.sort===k?-S.dir:1;S.sort=k;draw()}
 function setS(k,v){S[k]=v;S.page=1;draw()}
 let daily=false;
