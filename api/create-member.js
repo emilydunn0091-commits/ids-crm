@@ -3,14 +3,19 @@
 // The service-role key stays on the server; it is never sent to the browser.
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST' });
-  const U = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), K = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const clean = v => String(v || '').trim().replace(/^["']|["']$/g, '');
+  const U = clean(process.env.SUPABASE_URL).replace(/\/+$/, ''), K = clean(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!U || !K) return res.status(500).json({ error: 'Server not configured: add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, then redeploy.' });
-  const H = { apikey: K, Authorization: 'Bearer ' + K, 'Content-Type': 'application/json' };
+  // legacy service_role keys are JWTs (start with eyJ); new sb_secret_ keys go in the apikey header only
+  const H = { apikey: K, 'Content-Type': 'application/json', ...(K.startsWith('eyJ') ? { Authorization: 'Bearer ' + K } : {}) };
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!token) return res.status(401).json({ error: 'Not signed in' });
     const ur = await fetch(U + '/auth/v1/user', { headers: { apikey: K, Authorization: 'Bearer ' + token } });
-    if (!ur.ok) return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+    if (!ur.ok) {
+      const t = (await ur.text()).slice(0, 200);
+      return res.status(401).json({ error: `Could not verify your login (status ${ur.status}). Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, then redeploy. ${t}` });
+    }
     const caller = await ur.json();
     const pr = await (await fetch(`${U}/rest/v1/profiles?id=eq.${caller.id}&select=role,active`, { headers: H })).json();
     if (!Array.isArray(pr) || !pr[0] || !pr[0].active || !['team_lead', 'admin'].includes(pr[0].role))
