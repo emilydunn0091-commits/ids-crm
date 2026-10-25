@@ -114,6 +114,8 @@ async function go(v,arg){view=v;curTL=null;document.querySelectorAll('#side a').
 const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" onclick="$('#side').classList.toggle('open')">☰</button> <h1 style="display:inline">${t}</h1></div><div>${x}</div></div>`;
 // ---- dashboard
 async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records);let c;const hh=new Date().getHours(),hero=`<div class="hero"><small>WORKSPACE OVERVIEW</small><h2>${hh<12?'Good morning':hh<18?'Good afternoon':'Good evening'}, ${esc(me.full_name||me.email.split('@')[0])} 👋</h2><p>${isA()?'Everything across all Team Leads at a glance.':'Your files and daily updates at a glance.'}</p></div>`;
+ const resp=rs.filter(r=>r.last_updated&&r.remarks&&String(r.remarks).trim()),rd={};resp.forEach(r=>{const d=ld(r.last_updated);rd[d]=(rd[d]||0)+1});
+ const respPanel=`<div class="panel"><b>Responses</b><div class="cards" style="margin:10px 0">${[[rd[T]||0,'Responses today'],[resp.filter(r=>ld(r.last_updated).slice(0,7)===T.slice(0,7)).length,'Responses this month'],[resp.length,'Total responses']].map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div><div class="tw"><table><tr><th>Date</th><th>Responses</th></tr>${Object.entries(rd).sort().reverse().slice(0,7).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan=2>No responses yet</td></tr>'}</table></div></div>`;
  const by={};R.forEach(r=>by[r]=0);let none=0,ok=0;rs.forEach(r=>r.reason?by[r.reason]=(by[r.reason]||0)+1:isUp(r)?ok++:none++);
  if(isA()){const{data}=await sb.from('profiles').select('id').eq('role','team_lead');
   c=[[data?.length||0,'Total Team Leads'],[act.length,'Total Files'],[rs.length,'Total IDs'],[act.filter(f=>f.assignment_date===T).length,'Files Received Today'],[act.filter(f=>f.st!=='Completed').length,'Files Pending Updates'],[act.filter(f=>f.st==='Completed').length,'Files Completed']]}
@@ -122,7 +124,7 @@ async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records)
   ex=`<div class="panel"><b>Files received per day (latest 7)</b><div class="tw"><table><tr><th>Date</th><th>Files</th></tr>${Object.entries(d).sort().reverse().slice(0,7).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan=2>No data</td></tr>'}</table></div></div>`}
  $('#main').innerHTML=hdr('Dashboard',isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+
  `${hero}<div class="cards">${c.map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
- <div class="panel"><b>IDs by status</b><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${ok}</b><span>OK (no issue)</span></div><div class="card"><b>${none}</b><span>Not updated yet</span></div></div></div>${ex}
+ <div class="panel"><b>IDs by status</b><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${ok}</b><span>OK (no issue)</span></div><div class="card"><b>${none}</b><span>Not updated yet</span></div></div></div>${respPanel}${ex}
  <h3>Recently updated files</h3><div class="panel"><div class="tw">${ftable([...act].filter(f=>f.last).sort((a,b)=>b.last.localeCompare(a.last)).slice(0,5))}</div></div>`}
 // ---- files
 function ftable(list){if(!list.length)return'<div class="empty">No files found.</div>';
