@@ -64,7 +64,8 @@ const R=['Wrong Pass','Suspend','Suspend Working','Name Issue','Email','Other'];
 let me=null,files=[],view='dash',S={page:1,sort:'created_at',dir:-1,q:'',from:'',to:'',tl:'',st:''},RP={from:'',to:'',tl:''},RC=[],RF={q:'',reason:'',tl:'',from:'',to:''};
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ld=d=>new Date(d).toLocaleDateString('en-CA'),today=()=>ld(new Date()),fmt=d=>d?new Date(d).toLocaleString():'-',isA=()=>me.role==='admin';
-const rtxt=r=>r.reason==='Other'?'Other: '+(r.reason_other||''):(r.reason||(r.last_updated?'OK':''));
+const isUp=x=>!!(x.reason||(x.remarks&&String(x.remarks).trim()));const RN={admin:'Admin',team_lead:'Team Lead',member:'Member'},isTL=()=>me.role==='team_lead';
+const rtxt=r=>r.reason==='Other'?'Other: '+(r.reason_other||''):(r.reason||(isUp(r)?'OK':''));
 function toast(m,t='n'){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;$('#toasts').append(e);setTimeout(()=>e.remove(),4000)}
 function modal(h){$('#mbody').innerHTML=h;$('#modal').style.display='flex'}function closeM(){$('#modal').style.display='none'}
 $('#modal').onclick=e=>{if(e.target.id==='modal')closeM()};
@@ -96,30 +97,30 @@ async function boot(){const{data:{session}}=await sb.auth.getSession();if(!sessi
  const{data,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
  if(error||!data||!data.active){await sb.auth.signOut();$('#lerr').textContent='Your account is not active. Please contact your admin.';return}
  me=data;$('#login').style.display='none';$('#app').style.display='block';nav();go('dash')}
-const IC={dash:'⌂',files:'☰',add:'＋',daily:'◷',reports:'◐',profile:'☺',tls:'☻',records:'▤'};
-function nav(){const t=isA()?[['dash','Dashboard'],['files','All Files'],['tls','Team Leads'],['records','ID Records'],['reports','Daily & Monthly Reports'],['profile','Settings']]:
- [['dash','Dashboard'],['files','My Files'],['add','Add New File'],['daily','Daily Updates'],['reports','Reports'],['profile','Profile']];
- $('#side').innerHTML=`<div class="brand"><b>TechVera</b><small>IDS PORTAL</small></div>`+t.map(([k,l])=>`<a data-k="${k}" onclick="go('${k}')"><i>${IC[k]}</i>${l}</a>`).join('')+`<div style="flex:1"></div><div class="me">${esc(me.full_name||me.email)}<br>${isA()?'Admin':'Team Lead'}</div><a onclick="logout()"><i>↩</i>Sign out</a>`}
-async function fetchFiles(){const{data,error}=await sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email),id_records(id,reason,last_updated)').eq('archived',false).order('created_at',{ascending:false});
+const IC={dash:'⌂',files:'☰',add:'＋',daily:'◷',reports:'◐',profile:'☺',tls:'☻',records:'▤',members:'☻'};
+function nav(){const t=me.role==='member'?[['dash','Dashboard'],['files','My Files'],['profile','Profile']]:isA()?[['dash','Dashboard'],['files','All Files'],['tls','Team Leads'],['records','ID Records'],['reports','Daily & Monthly Reports'],['profile','Settings']]:
+ [['dash','Dashboard'],['files','My Files'],['add','Add New File'],['members','Team Members'],['daily','Daily Updates'],['reports','Reports'],['profile','Profile']];
+ $('#side').innerHTML=`<div class="brand"><b>TechVera</b><small>IDS PORTAL</small></div>`+t.map(([k,l])=>`<a data-k="${k}" onclick="go('${k}')"><i>${IC[k]}</i>${l}</a>`).join('')+`<div style="flex:1"></div><div class="me">${esc(me.full_name||me.email)}<br>${RN[me.role]}</div><a onclick="logout()"><i>↩</i>Sign out</a>`}
+async function fetchFiles(){const{data,error}=await sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email),id_records(id,reason,remarks,last_updated)').eq('archived',false).order('created_at',{ascending:false});
  if(error){toast(error.message,'e');return false}
- files=data.map(f=>{const r=f.id_records||[];f.total=r.length;f.upd=r.filter(x=>x.last_updated).length;f.pend=f.total-f.upd;f.last=r.reduce((m,x)=>x.last_updated&&x.last_updated>m?x.last_updated:m,'');
-  f.today=r.some(x=>x.last_updated&&ld(x.last_updated)===today());f.st=f.upd===0?'Pending':f.pend===0?'Completed':'In-Progress';f.tlname=f.tl?.full_name||f.tl?.email||'-';return f});return true}
+ files=data.map(f=>{const r=f.id_records||[];f.total=r.length;f.upd=r.filter(isUp).length;f.pend=f.total-f.upd;f.last=r.reduce((m,x)=>isUp(x)&&x.last_updated&&x.last_updated>m?x.last_updated:m,'');
+  f.today=r.some(x=>isUp(x)&&x.last_updated&&ld(x.last_updated)===today());f.st=f.upd===0?'Pending':f.pend===0?'Completed':'In-Progress';f.tlname=f.tl?.full_name||f.tl?.email||'-';return f});return true}
 async function go(v,arg){view=v;curTL=null;document.querySelectorAll('#side a').forEach(a=>a.classList.toggle('on',a.dataset.k===v));$('#side').classList.remove('open');
  const m=$('#main');m.innerHTML='<div class="empty">Loading…</div>';
  if(v==='profile')return pProfile();if(v==='add'){await fetchFiles();return pAdd()}
  if(v==='records')return pRecords();
  if(!(await fetchFiles()))return m.innerHTML='<div class="empty">Could not load data.</div>';
- ({dash:pDash,files:()=>pFiles('files'),daily:()=>pFiles('daily'),reports:pReports,tls:pTLs})[v]()}
+ ({dash:pDash,files:()=>pFiles('files'),daily:()=>pFiles('daily'),reports:pReports,tls:pTLs,members:pMembers})[v]()}
 const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" onclick="$('#side').classList.toggle('open')">☰</button> <h1 style="display:inline">${t}</h1></div><div>${x}</div></div>`;
 // ---- dashboard
 async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records);let c;const hh=new Date().getHours(),hero=`<div class="hero"><small>WORKSPACE OVERVIEW</small><h2>${hh<12?'Good morning':hh<18?'Good afternoon':'Good evening'}, ${esc(me.full_name||me.email.split('@')[0])} 👋</h2><p>${isA()?'Everything across all Team Leads at a glance.':'Your files and daily updates at a glance.'}</p></div>`;
- const by={};R.forEach(r=>by[r]=0);let none=0,ok=0;rs.forEach(r=>r.reason?by[r.reason]=(by[r.reason]||0)+1:r.last_updated?ok++:none++);
+ const by={};R.forEach(r=>by[r]=0);let none=0,ok=0;rs.forEach(r=>r.reason?by[r.reason]=(by[r.reason]||0)+1:isUp(r)?ok++:none++);
  if(isA()){const{data}=await sb.from('profiles').select('id').eq('role','team_lead');
   c=[[data?.length||0,'Total Team Leads'],[act.length,'Total Files'],[rs.length,'Total IDs'],[act.filter(f=>f.assignment_date===T).length,'Files Received Today'],[act.filter(f=>f.st!=='Completed').length,'Files Pending Updates'],[act.filter(f=>f.st==='Completed').length,'Files Completed']]}
  else c=[[act.length,'Total Files'],[rs.length,'Total IDs Assigned'],[act.filter(f=>!f.today).length,'Files Pending Update Today'],[act.filter(f=>f.today).length,'Files Updated Today']];
  let ex='';if(isA()){const d={};act.forEach(f=>d[f.assignment_date]=(d[f.assignment_date]||0)+1);
   ex=`<div class="panel"><b>Files received per day (latest 7)</b><div class="tw"><table><tr><th>Date</th><th>Files</th></tr>${Object.entries(d).sort().reverse().slice(0,7).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan=2>No data</td></tr>'}</table></div></div>`}
- $('#main').innerHTML=hdr('Dashboard',isA()?'':'<button class="btn" onclick="go(\'add\')">+ Add New File</button>')+
+ $('#main').innerHTML=hdr('Dashboard',isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+
  `${hero}<div class="cards">${c.map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
  <div class="panel"><b>IDs by status</b><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${ok}</b><span>OK (no issue)</span></div><div class="card"><b>${none}</b><span>Not updated yet</span></div></div></div>${ex}
  <h3>Recently updated files</h3><div class="panel"><div class="tw">${ftable([...act].filter(f=>f.last).sort((a,b)=>b.last.localeCompare(a.last)).slice(0,5))}</div></div>`}
@@ -128,12 +129,12 @@ function ftable(list){if(!list.length)return'<div class="empty">No files found.<
  const th=(k,l)=>`<th onclick="sortBy('${k}')">${l}${S.sort===k?(S.dir>0?' ▲':' ▼'):''}</th>`;
  return`<table><tr>${th('file_name','File')}${isA()?th('tlname','Team Lead'):''}${th('received_from','Received From')}${th('assigned_to','Assigned To')}${th('assignment_date','Date')}${th('total','Total')}${th('upd','Updated')}${th('pend','Pending')}${th('last','Last Updated')}<th>Status</th><th>Actions</th></tr>`+
  list.map(f=>`<tr><td>${esc(f.file_name)}</td>${isA()?`<td>${esc(f.tlname)}</td>`:''}<td>${esc(f.received_from)}</td><td>${esc(f.assigned_to)}</td><td>${f.assignment_date}</td><td>${f.total}</td><td>${f.upd}</td><td>${f.pend}</td><td>${fmt(f.last)}</td><td><span class="tag ${f.st}">${f.st.replace('-',' ')}</span></td>
- <td><button class="btn s sm" onclick="openFile('${f.id}',false)">Open File</button> <button class="btn sm" onclick="openFile('${f.id}',true)">Update IDs</button> <button class="btn d sm" onclick="delFile('${f.id}')">Delete</button></td></tr>`).join('')+'</table>'}
+ <td><button class="btn s sm" onclick="openFile('${f.id}',false)">Open File</button> <button class="btn sm" onclick="openFile('${f.id}',true)">Update IDs</button> ${me.role==='member'?'':`<button class="btn d sm" onclick="delFile('${f.id}')">Delete</button>`}</td></tr>`).join('')+'</table>'}
 function sortBy(k){S.dir=S.sort===k?-S.dir:1;S.sort=k;draw()}
 function setS(k,v){S[k]=v;S.page=1;draw()}
 let daily=false;
 function pFiles(mode){daily=mode==='daily';const tls=[...new Set(files.map(f=>f.tlname))].sort();
- $('#main').innerHTML=hdr(daily?'Daily Updates':isA()?'All Files':'My Files',isA()?'':'<button class="btn" onclick="go(\'add\')">+ Add New File</button>')+
+ $('#main').innerHTML=hdr(daily?'Daily Updates':isA()?'All Files':'My Files',isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+
  `<div class="panel"><div class="bar"><input placeholder="Search file, sender, assignee…" value="${esc(S.q)}" oninput="clearTimeout(window._t);window._t=setTimeout(()=>setS('q',this.value),250)">
  ${isA()?`<select onchange="setS('tl',this.value)"><option value="">All Team Leads</option>${tls.map(t=>`<option ${S.tl===t?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}
  <select onchange="setS('st',this.value)"><option value="">All statuses</option>${['Pending','In-Progress','Completed'].map(s=>`<option value="${s}" ${S.st===s?'selected':''}>${s.replace('-',' ')}</option>`).join('')}</select>
@@ -153,12 +154,12 @@ async function delFile(id){const f=files.find(x=>x.id===id);if(!f)return;
 async function archive(id){if(!confirm('Archive this file? It will be hidden from lists (data is kept).'))return;
  const{data,error}=await sb.from('files').update({archived:true}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Not permitted','e');toast('File archived','o');go(view)}
 // ---- add file
-function pAdd(){$('#main').innerHTML=hdr('Add New File')+`<div class="panel" style="max-width:640px"><div class="g2"><div><label>File Name *</label><input id="a1"></div><div><label>Received From *</label><input id="a2"></div>
- <div><label>Assigned To *</label><input id="a3"></div><div><label>Assignment Date *</label><input id="a4" type="date" value="${today()}"></div><div><label>Total Number of IDs *</label><input id="a5" type="number" min="1" max="500"></div></div>
+function pAdd(){pickM=null;$('#main').innerHTML=hdr('Add New File')+`<div class="panel" style="max-width:640px"><div class="g2"><div><label>File Name *</label><input id="a1"></div><div><label>Received From *</label><input id="a2"></div>
+ <div><label>Assigned To * (choose a member)</label><input id="a3" readonly placeholder="Click to choose a member" onclick="pickMember()" style="cursor:pointer"></div><div><label>Assignment Date *</label><input id="a4" type="date" value="${today()}"></div><div><label>Total Number of IDs *</label><input id="a5" type="number" min="1" max="500"></div></div>
  <label>Notes (optional)</label><textarea id="a6" rows="3"></textarea><p><button class="btn" id="asave" onclick="addFile()">Create File</button></p></div>`}
 async function addFile(){const v=i=>$('#a'+i).value.trim(),n=parseInt(v(5),10);
- if(!v(1)||!v(2)||!v(3)||!v(4))return toast('Fill in all required fields','e');if(!(n>=1&&n<=500))return toast('Total IDs must be between 1 and 500','e');
- $('#asave').disabled=true;const{data,error}=await sb.rpc('create_file_with_records',{p_name:v(1),p_from:v(2),p_to:v(3),p_date:v(4),p_total:n,p_notes:v(6)||null});$('#asave').disabled=false;
+ if(!v(1)||!v(2)||!v(4))return toast('Fill in all required fields','e');if(!pickM)return toast('Choose a member in Assigned To','e');if(!(n>=1&&n<=500))return toast('Total IDs must be between 1 and 500','e');
+ $('#asave').disabled=true;const{data,error}=await sb.rpc('create_file_with_records',{p_name:v(1),p_from:v(2),p_to:v(3),p_date:v(4),p_total:n,p_notes:v(6)||null,p_member:pickM});$('#asave').disabled=false;
  if(error)return toast(error.message,'e');toast(`File created with ${n} ID entries`,'o');openFile(data,true)}
 // ---- file view / update
 async function openFile(id,edit){view='file';const m=$('#main');m.innerHTML='<div class="empty">Loading…</div>';
@@ -166,9 +167,9 @@ async function openFile(id,edit){view='file';const m=$('#main');m.innerHTML='<di
  if(a.error||b.error)return m.innerHTML=`<div class="empty">${esc((a.error||b.error).message)}</div>`;
  const f=a.data,rs=b.data,tl=f.tl?.full_name||f.tl?.email||'-',dis=edit?'':'disabled';window._rs=rs;window._f=f;window._tl=tl;
  m.innerHTML=hdr(esc(f.file_name),`<button class="btn s" onclick="curTL?tlFiles(curTL):go('files')">← Back</button> ${edit?'':`<button class="btn" onclick="openFile('${id}',true)">Update IDs</button>`}`)+
- `<div class="panel">Team Lead: <b>${esc(tl)}</b> · Received from: <b>${esc(f.received_from)}</b> · Assigned to: <b>${esc(f.assigned_to)}</b> · Date: <b>${f.assignment_date}</b> · IDs: <b>${rs.length}</b>${f.notes?`<br><span style="color:var(--mu)">${esc(f.notes)}</span>`:''}
+ `<div class="panel">Team Lead: <b>${esc(tl)}</b> · Received from: <b>${esc(f.received_from)}</b> · Assigned to: <b>${esc(f.assigned_to)}</b> · Date: <b>${f.assignment_date}</b> · IDs: <b>${rs.length}</b> · Status: ${(()=>{const u=rs.filter(isUp).length,st=u===0?'Pending':u===rs.length?'Completed':'In-Progress';return`<span class="tag ${st}">${st.replace('-',' ')}</span> (${u}/${rs.length} updated)`})()}${f.notes?`<br><span style="color:var(--mu)">${esc(f.notes)}</span>`:''}
  <div style="margin-top:10px"><button class="btn s sm" onclick="copyAll()">Copy all (Excel)</button> <button class="btn s sm" onclick="csv(fileRows(),'file')">Export CSV</button></div></div>
- <div class="panel"><div class="tw"><table><tr><th>Person</th><th>UID / ID</th><th>Password</th><th>Reason / Status</th><th>Response</th><th>Last Updated</th><th>Copy</th></tr>`+
+ ${edit?'<p style="color:var(--mu);margin:0 0 10px">UID and password are optional. For each ID choose a reason or write a response, then press Save Updates.</p>':''}<div class="panel"><div class="tw"><table><tr><th>Person</th><th>UID / ID</th><th>Password</th><th>Reason / Status</th><th>Response</th><th>Last Updated</th><th>Copy</th></tr>`+
  rs.map(r=>`<tr data-id="${r.id}"><td>Person ${r.person_number}</td><td><input class="u" value="${esc(r.uid)}" ${dis}></td><td><input class="p" value="${esc(r.password)}" ${dis}></td>
  <td><select class="r" ${dis} onchange="this.nextElementSibling.style.display=this.value==='Other'?'block':'none'"><option value="">— ID OK</option>${(!r.reason||R.includes(r.reason)?R:[...R,r.reason]).map(x=>`<option ${r.reason===x?'selected':''}>${x}</option>`).join('')}</select>
  <input class="o" placeholder="Write your own remark…" value="${esc(r.reason_other)}" ${dis} style="display:${r.reason==='Other'?'block':'none'};margin-top:4px"></td>
@@ -188,7 +189,7 @@ async function saveRows(fid){const ch=[];
  if(!ch.length)return toast('No changes to save');$('#ssave').disabled=true;
  const res=await Promise.all(ch.map(c=>sb.from('id_records').update(c.n).eq('id',c.id).select('id')));$('#ssave').disabled=false;
  const bad=res.map((r,i)=>r.error||!r.data?.length?ch[i].p:null).filter(Boolean);
- if(bad.length)toast(`Save failed for Person ${bad.join(', ')}. Other changes may have saved; reload to check.`,'e');else toast(`Saved ${ch.length} update(s)`,'o');
+ if(bad.length)toast(`Save failed for Person ${bad.join(', ')}. Other changes may have saved; reload to check.`,'e');else{const left=[...document.querySelectorAll('tr[data-id]')].filter(tr=>!tr.querySelector('.r').value&&!tr.querySelector('.m').value.trim()).length;toast(left?`Saved. ${left} ID(s) still need a reason or response.`:'Saved. File complete ✓','o')}
  openFile(fid,true)}
 async function hist(id){const{data,error}=await sb.from('id_update_history').select('*,u:profiles(full_name,email)').eq('id_record_id',id).order('updated_at',{ascending:false});
  if(error)return toast(error.message,'e');
@@ -197,13 +198,13 @@ async function hist(id){const{data,error}=await sb.from('id_update_history').sel
 async function pRecords(){const m=$('#main');let all=[],from=0;
  for(;;){const{data,error}=await sb.from('id_records').select('*,f:files!inner(file_name,assignment_date,archived,tl:profiles!files_team_lead_id_fkey(full_name,email))').eq('f.archived',false).order('file_id').order('person_number').range(from,from+999);
   if(error)return m.innerHTML=`<div class="empty">${esc(error.message)}</div>`;all=all.concat(data);if(data.length<1000)break;from+=1000}
- RC=all.map(r=>({file:r.f.file_name,tl:r.f.tl?.full_name||r.f.tl?.email||'-',date:r.f.assignment_date,person:r.person_number,uid:r.uid||'',password:r.password||'',reason:rtxt(r),rk:r.reason||'',remarks:r.remarks||'',last:fmt(r.last_updated),ld:r.last_updated}));
+ RC=all.map(r=>({file:r.f.file_name,tl:r.f.tl?.full_name||r.f.tl?.email||'-',date:r.f.assignment_date,person:r.person_number,uid:r.uid||'',password:r.password||'',reason:rtxt(r),rk:r.reason||'',remarks:r.remarks||'',last:fmt(r.last_updated),ld:r.last_updated,up:isUp(r)}));
  const tls=[...new Set(RC.map(r=>r.tl))].sort();
  m.innerHTML=hdr('ID Records','<button class="btn s" onclick="csv(RV(),\'records\')">Export filtered CSV</button>')+`<div class="panel"><div class="bar"><input placeholder="Search file name or UID" oninput="RF.q=this.value;rdraw()">
  ${isA()?`<select onchange="RF.tl=this.value;rdraw()"><option value="">All Team Leads</option>${tls.map(t=>`<option>${esc(t)}</option>`).join('')}</select>`:''}
  <select onchange="RF.reason=this.value;rdraw()"><option value="">All reasons</option><option value="_ok">OK (no issue)</option><option value="_none">Not updated</option>${R.map(x=>`<option>${x}</option>`).join('')}</select>
  <input type="date" onchange="RF.from=this.value;rdraw()"><input type="date" onchange="RF.to=this.value;rdraw()"></div><div class="tw" id="rt"></div></div>`;RF={q:'',reason:'',tl:'',from:'',to:''};rdraw()}
-const RV=()=>{const q=RF.q.toLowerCase();return RC.filter(r=>(!q||r.file.toLowerCase().includes(q)||r.uid.toLowerCase().includes(q))&&(!RF.tl||r.tl===RF.tl)&&(!RF.reason||(RF.reason==='_none'?!r.ld:RF.reason==='_ok'?(r.ld&&!r.rk):r.rk===RF.reason))&&(!RF.from||r.date>=RF.from)&&(!RF.to||r.date<=RF.to))};
+const RV=()=>{const q=RF.q.toLowerCase();return RC.filter(r=>(!q||r.file.toLowerCase().includes(q)||r.uid.toLowerCase().includes(q))&&(!RF.tl||r.tl===RF.tl)&&(!RF.reason||(RF.reason==='_none'?!r.up:RF.reason==='_ok'?(r.up&&!r.rk):r.rk===RF.reason))&&(!RF.from||r.date>=RF.from)&&(!RF.to||r.date<=RF.to))};
 function rdraw(){const l=RV(),s=l.slice(0,300);$('#rt').innerHTML=l.length?`<table><tr><th>File</th>${isA()?'<th>Team Lead</th>':''}<th>Date</th><th>Person</th><th>UID</th><th>Password</th><th>Reason</th><th>Response</th><th>Last Updated</th><th>Copy</th></tr>${s.map((r,i)=>`<tr><td>${esc(r.file)}</td>${isA()?`<td>${esc(r.tl)}</td>`:''}<td>${r.date}</td><td>${r.person}</td><td>${esc(r.uid)}</td><td>${esc(r.password)}</td><td>${esc(r.reason)}</td><td>${esc(r.remarks)}</td><td>${r.last}</td>
  <td><button class="btn s sm" onclick="copy(RV()[${i}].uid,'UID copied')">UID</button> <button class="btn s sm" onclick="copy(RV()[${i}].password,'Password copied')">Pass</button></td></tr>`).join('')}</table>${l.length>300?`<p style="color:var(--mu)">Showing first 300 of ${l.length}. Use filters or export.</p>`:`<p style="color:var(--mu)">${l.length} records</p>`}`:'<div class="empty">No records match.</div>'}
 // ---- reports
@@ -213,9 +214,9 @@ function pReports(){const tls=[...new Set(files.map(f=>f.tlname))].sort();
 function rep(){const fl=files.filter(f=>(!RP.tl||f.tlname===RP.tl)&&(!RP.from||f.assignment_date>=RP.from)&&(!RP.to||f.assignment_date<=RP.to));
  const tb=(h,rows)=>`<div class="panel tw"><table><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${h.length}">No data</td></tr>`}</table></div>`;
  const grp=(arr,kf)=>{const o={};arr.forEach(x=>{const k=kf(x);(o[k]=o[k]||[]).push(x)});return Object.entries(o).sort().reverse()};
- const recs=fl.flatMap(f=>f.id_records),upd=recs.filter(r=>r.last_updated&&(!RP.from||ld(r.last_updated)>=RP.from)&&(!RP.to||ld(r.last_updated)<=RP.to));
- const by={};R.forEach(r=>by[r]=0);recs.forEach(r=>r.reason&&(by[r.reason]=(by[r.reason]||0)+1));by['OK (no issue)']=recs.filter(r=>r.last_updated&&!r.reason).length;
- $('#rep').innerHTML=`<div class="cards"><div class="card"><b>${fl.length}</b><span>Files</span></div><div class="card"><b>${recs.length}</b><span>IDs</span></div><div class="card"><b>${recs.filter(r=>r.last_updated).length}</b><span>IDs updated</span></div><div class="card"><b>${recs.filter(r=>!r.last_updated).length}</b><span>IDs pending</span></div></div>
+ const recs=fl.flatMap(f=>f.id_records),upd=recs.filter(r=>isUp(r)&&r.last_updated&&(!RP.from||ld(r.last_updated)>=RP.from)&&(!RP.to||ld(r.last_updated)<=RP.to));
+ const by={};R.forEach(r=>by[r]=0);recs.forEach(r=>r.reason&&(by[r.reason]=(by[r.reason]||0)+1));by['OK (no issue)']=recs.filter(r=>isUp(r)&&!r.reason).length;
+ $('#rep').innerHTML=`<div class="cards"><div class="card"><b>${fl.length}</b><span>Files</span></div><div class="card"><b>${recs.length}</b><span>IDs</span></div><div class="card"><b>${recs.filter(isUp).length}</b><span>IDs updated</span></div><div class="card"><b>${recs.filter(r=>!isUp(r)).length}</b><span>IDs pending</span></div></div>
  <h3>Files assigned per date</h3>${tb(['Date','Files','IDs'],grp(fl,f=>f.assignment_date).map(([k,v])=>[k,v.length,v.reduce((s,f)=>s+f.total,0)]))}
  <h3>IDs by Team Lead</h3>${tb(['Team Lead','Files','IDs','Updated','Pending'],grp(fl,f=>f.tlname).reverse().map(([k,v])=>[k,v.length,v.reduce((s,f)=>s+f.total,0),v.reduce((s,f)=>s+f.upd,0),v.reduce((s,f)=>s+f.pend,0)]))}
  <h3>Reason breakdown</h3>${tb(['Reason','IDs'],Object.entries(by))}
@@ -231,9 +232,32 @@ async function tlFiles(id){const p=TLP.find(x=>x.id===id);if(!p)return;const nm=
  document.querySelectorAll('#side a').forEach(a=>a.classList.toggle('on',a.dataset.k==='tls'));$('#main').innerHTML='<div class="empty">Loading…</div>';
  if(!(await fetchFiles()))return;S={...S,q:'',st:'',from:'',to:'',tl:nm,page:1};pFiles('files');
  $('.top h1').textContent='Files of '+nm;$('.top>div:last-child').innerHTML='<button class="btn s" onclick="go(\'tls\')">← Team Leads</button>'}
+let pickM=null,MEM=[];
+async function loadMembers(){const{data,error}=await sb.from('profiles').select('*').eq('role','member').order('full_name');if(error){toast(error.message,'e');return false}MEM=data;return true}
+async function pMembers(){if(!(await loadMembers()))return;
+ const row=m=>{const fl=files.filter(f=>f.assigned_member_id===m.id);return`<tr><td>${esc(m.full_name)||'-'}</td><td>${esc(m.email)}</td><td>${fl.length}</td><td>${fl.reduce((s,f)=>s+f.total,0)}</td><td>${fl.filter(f=>f.st==='Completed').length}</td><td>${m.active?'Yes':'No'}</td><td><button class="btn s sm" onclick="setMember('${m.id}',${!m.active})">${m.active?'Deactivate':'Activate'}</button></td></tr>`};
+ $('#main').innerHTML=hdr('Team Members','<button class="btn" onclick="newMember()">+ Create user</button>')+(MEM.length?`<div class="panel tw"><table><tr><th>Name</th><th>Email</th><th>Files</th><th>IDs</th><th>Completed files</th><th>Active</th><th></th></tr>${MEM.map(row).join('')}</table></div>`:`<div class="panel empty"><p>No team members yet.</p><button class="btn" onclick="newMember()">+ Create user</button></div>`)}
+async function setMember(id,v){if(!(await ask({title:v?'Activate member?':'Deactivate member?',msg:v?'They can log in again.':'They will lose access immediately.',ok:v?'Activate':'Deactivate',danger:!v})))return;
+ const{data,error}=await sb.from('profiles').update({active:v}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pMembers()}
+function newMember(){modal(`<h3 style="margin:0 0 4px;font-size:18px">Create user</h3><p style="color:var(--mu);margin:0 0 6px">This person will log in to see and update the files you assign.</p><label>Full name</label><input id="mn"><label>Email</label><input id="mm" type="email"><label>Password (min 8 characters)</label><input id="mp"><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn s" onclick="closeM()">Cancel</button><button class="btn" id="mbtn" onclick="saveMember()">Create user</button></div>`)}
+async function saveMember(){const name=$('#mn').value.trim(),email=$('#mm').value.trim(),password=$('#mp').value;
+ if(!name||!email)return toast('Enter name and email','e');if(password.length<8)return toast('Password must be at least 8 characters','e');
+ $('#mbtn').disabled=true;
+ try{const{data:{session}}=await sb.auth.getSession();
+  const r=await fetch('/api/create-member',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({name,email,password})});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===404){$('#mbtn').disabled=false;return toast('Member service is not set up yet. Add api/create-member.js to the project.','e')}
+  if(!r.ok){$('#mbtn').disabled=false;return toast(j.error||'Could not create user','e')}
+  window._ci='TechVera IDs Portal\nLink: '+location.origin+'\nEmail: '+email+'\nPassword: '+password;
+  modal(`<h3 style="margin:0 0 6px;font-size:18px">User created ✓</h3><p style="color:var(--mu);margin:0 0 10px">Give these login details to ${esc(name)}:</p><div class="panel" style="white-space:pre-wrap;word-break:break-all">${esc(window._ci)}</div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn s" onclick="closeM()">Close</button><button class="btn" onclick="copy(window._ci,'Login details copied')">Copy details</button></div>`);
+  pMembers()
+ }catch(e){$('#mbtn').disabled=false;toast('Network error: '+e.message,'e')}}
+async function pickMember(){if(!(await loadMembers()))return;const ms=MEM.filter(m=>m.active);
+ modal(`<h3 style="margin:0 0 10px;font-size:18px">Assign to</h3>${ms.length?ms.map(m=>`<div class="panel" style="cursor:pointer;margin-bottom:8px;padding:12px" onclick="setM('${m.id}')"><b>${esc(m.full_name||m.email)}</b><br><small style="color:var(--mu)">${esc(m.email)}</small></div>`).join(''):'<div class="empty">No members yet. Create a user first.</div>'}<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn s" onclick="closeM()">Cancel</button><button class="btn" onclick="closeM();go('members')">+ Create user</button></div>`)}
+function setM(id){const m=MEM.find(x=>x.id===id);if(!m)return;pickM=id;$('#a3').value=m.full_name||m.email;closeM()}
 async function setActive(id,v){if(!(await ask({title:v?'Activate user?':'Deactivate user?',msg:v?'They will be able to log in again.':'They will lose access immediately.',ok:v?'Activate':'Deactivate',danger:!v})))return;const{data,error}=await sb.from('profiles').update({active:v}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
 async function rename(id,n){const v=await ask({title:'Rename Team Lead',msg:'Full name',input:n,ok:'Save'});if(v===null)return;const{data,error}=await sb.from('profiles').update({full_name:v.trim()}).eq('id',id).select();if(error||!data?.length)return toast(error?.message||'Failed','e');toast('Updated','o');pTLs()}
-function pProfile(){$('#main').innerHTML=hdr(isA()?'Settings':'Profile')+`<div class="panel" style="max-width:420px"><p><b>${esc(me.full_name||'-')}</b><br>${esc(me.email)}<br>Role: ${isA()?'Admin':'Team Lead'}</p>
+function pProfile(){$('#main').innerHTML=hdr(isA()?'Settings':'Profile')+`<div class="panel" style="max-width:420px"><p><b>${esc(me.full_name||'-')}</b><br>${esc(me.email)}<br>Role: ${RN[me.role]}</p>
  <label>New password</label><input id="np" type="password" autocomplete="new-password"><p><button class="btn" onclick="chpw()">Change password</button></p></div>`}
 async function chpw(){const p=$('#np').value;if(p.length<8)return toast('Use at least 8 characters','e');const{error}=await sb.auth.updateUser({password:p});if(error)return toast(error.message,'e');$('#np').value='';toast('Password changed','o')}
 boot();
