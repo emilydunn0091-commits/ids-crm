@@ -138,7 +138,7 @@ function sortBy(k){S.dir=S.sort===k?-S.dir:1;S.sort=k;draw()}
 function setS(k,v){S[k]=v;S.page=1;draw()}
 let daily=false;
 function pFiles(mode){daily=mode==='daily';const tls=[...new Set(files.map(f=>f.tlname))].sort();
- $('#main').innerHTML=hdr(daily?'Daily Updates':isA()?'All Files':'My Files',isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+
+ $('#main').innerHTML=hdr(daily?'Daily Updates':isA()?'All Files':'My Files',isA()&&!daily?'<button class="btn" onclick="downloadAll()">⬇ Download all</button>':isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+
  `<div class="panel"><div class="bar"><input placeholder="Search file, sender, assignee…" value="${esc(S.q)}" oninput="clearTimeout(window._t);window._t=setTimeout(()=>setS('q',this.value),250)">
  ${isA()?`<select onchange="setS('tl',this.value)"><option value="">All Team Leads</option>${tls.map(t=>`<option ${S.tl===t?'selected':''}>${esc(t)}</option>`).join('')}</select>`:''}
  <select onchange="setS('st',this.value)"><option value="">All statuses</option>${['Pending','In-Progress','Completed'].map(s=>`<option value="${s}" ${S.st===s?'selected':''}>${s.replace('-',' ')}</option>`).join('')}</select>
@@ -150,6 +150,10 @@ function draw(){if(!$('#tbl'))return;const q=S.q.toLowerCase();
  l.sort((a,b)=>{const x=a[S.sort]??'',y=b[S.sort]??'';return(x>y?1:x<y?-1:0)*S.dir});
  const n=Math.max(1,Math.ceil(l.length/10));S.page=Math.min(S.page,n);$('#tbl').innerHTML=ftable(l.slice((S.page-1)*10,S.page*10));
  $('#pg').innerHTML=`<span>${l.length} files</span><button class="btn s sm" ${S.page<2?'disabled':''} onclick="S.page--;draw()">Prev</button> ${S.page}/${n} <button class="btn s sm" ${S.page>=n?'disabled':''} onclick="S.page++;draw()">Next</button>`}
+async function downloadAll(){toast('Preparing download…');let all=[],from=0;
+ for(;;){const{data,error}=await sb.from('id_records').select('*,f:files!inner(file_name,assignment_date,archived,tl:profiles!files_team_lead_id_fkey(full_name,email))').eq('f.archived',false).order('file_id').order('person_number').range(from,from+999);
+  if(error)return toast(error.message,'e');all=all.concat(data);if(data.length<1000)break;from+=1000}
+ csv(all.map(r=>({file:r.f.file_name,tl:r.f.tl?.full_name||r.f.tl?.email||'-',date:r.f.assignment_date,person:r.person_number,uid:r.uid||'',password:r.password||'',reason:rtxt(r),remarks:r.remarks||'',last:fmt(r.last_updated)})),'all-files')}
 async function delFile(id){const f=files.find(x=>x.id===id);if(!f)return;
  if(!(await ask({title:'Delete file?',msg:`"${f.file_name}" and all ${f.total} IDs with their update history will be permanently deleted. This cannot be undone.`,ok:'Delete',danger:true})))return;
  
