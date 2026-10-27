@@ -63,7 +63,7 @@ const C=window.APP_CONFIG,sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANO
 const R=['Wrong Pass','Already Suspend','Suspend Working','Name Issue','Email','1st Reach Marketplace','Confirm Identity','Other'];
 let me=null,files=[],view='dash',S={page:1,sort:'created_at',dir:-1,q:'',from:'',to:'',tl:'',st:''},RP={from:'',to:'',tl:''},RC=[],RF={q:'',reason:'',tl:'',from:'',to:''};
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ld=d=>new Date(d).toLocaleDateString('en-CA'),today=()=>ld(new Date()),fmt=d=>d?new Date(d).toLocaleString():'-',isA=()=>me.role==='admin';
+const DAY_START=6,ld=d=>new Date(new Date(d).getTime()-DAY_START*3600000).toLocaleDateString('en-CA'),today=()=>ld(new Date()),fmt=d=>d?new Date(d).toLocaleString():'-',isA=()=>me.role==='admin';
 const isUp=x=>!!(x.reason||(x.remarks&&String(x.remarks).trim()));const RN={admin:'Admin',team_lead:'Team Lead',member:'Member'},isTL=()=>me.role==='team_lead';
 const rtxt=r=>r.reason==='Other'?'Other: '+(r.reason_other||''):(r.reason||(isUp(r)?'OK':''));
 function toast(m,t='n'){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;$('#toasts').append(e);setTimeout(()=>e.remove(),4000)}
@@ -113,7 +113,7 @@ async function go(v,arg){view=v;curTL=null;document.querySelectorAll('#side a').
  ({dash:pDash,files:()=>pFiles('files'),daily:()=>pFiles('daily'),reports:pReports,tls:pTLs,members:pMembers})[v]()}
 const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" onclick="$('#side').classList.toggle('open')">☰</button> <h1 style="display:inline">${t}</h1></div><div>${x}</div></div>`;
 // ---- dashboard
-async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records);let c;const hh=new Date().getHours(),hero=`<div class="hero"><small>WORKSPACE OVERVIEW</small><h2>${hh<12?'Good morning':hh<18?'Good afternoon':'Good evening'}, ${esc(me.full_name||me.email.split('@')[0])} 👋</h2><p>${isA()?'Everything across all Team Leads at a glance.':'Your files and daily updates at a glance.'}</p></div>`;
+async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records);let c;const hh=new Date().getHours(),hero=`<div class="hero"><small>WORKSPACE OVERVIEW</small><h2>${hh<12?'Good morning':hh<18?'Good afternoon':'Good evening'}, ${esc(me.full_name||me.email.split('@')[0])} 👋</h2><p>${isA()?'Everything across all Team Leads at a glance.':'Your files and daily updates at a glance.'} Work day: <b>${today()}</b> (changes at ${DAY_START}:00 AM)</p></div>`;
  const respN=r=>{const m=String(r.remarks||'').match(/\d+/);return m?parseInt(m[0],10):0};
  const resp=rs.filter(r=>r.last_updated&&respN(r)>0),rd={};resp.forEach(r=>{const d=ld(r.last_updated),o=rd[d]||(rd[d]={ids:0,n:0});o.ids++;o.n+=respN(r)});
  const sumN=a=>a.reduce((t,r)=>t+respN(r),0);
