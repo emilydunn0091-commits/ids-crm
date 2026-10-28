@@ -113,21 +113,34 @@ async function go(v,arg){view=v;curTL=null;document.querySelectorAll('#side a').
  ({dash:pDash,files:()=>pFiles('files'),daily:()=>pFiles('daily'),reports:pReports,tls:pTLs,members:pMembers})[v]()}
 const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" onclick="$('#side').classList.toggle('open')">☰</button> <h1 style="display:inline">${t}</h1></div><div>${x}</div></div>`;
 // ---- dashboard
-async function pDash(){const T=today(),act=files,rs=act.flatMap(f=>f.id_records);let c;const hh=new Date().getHours(),hero=`<div class="hero"><small>WORKSPACE OVERVIEW</small><h2>${hh<12?'Good morning':hh<18?'Good afternoon':'Good evening'}, ${esc(me.full_name||me.email.split('@')[0])} 👋</h2><p>${isA()?'Everything across all Team Leads at a glance.':'Your files and daily updates at a glance.'} Work day: <b>${today()}</b> (changes at ${DAY_START}:00 AM)</p></div>`;
- const respN=r=>{const m=String(r.remarks||'').match(/\d+/);return m?parseInt(m[0],10):0};
- const resp=rs.filter(r=>r.last_updated&&respN(r)>0),rd={};resp.forEach(r=>{const d=ld(r.last_updated),o=rd[d]||(rd[d]={ids:0,n:0});o.ids++;o.n+=respN(r)});
- const sumN=a=>a.reduce((t,r)=>t+respN(r),0);
- const respPanel=`<div class="panel"><b>Responses</b><div class="cards" style="margin:10px 0">${[[rd[T]?rd[T].n:0,'Responses today'],[sumN(resp.filter(r=>ld(r.last_updated).slice(0,7)===T.slice(0,7))),'Responses this month'],[sumN(resp),'Total responses']].map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div><div class="tw"><table><tr><th>Date</th><th>IDs with response</th><th>Total responses</th></tr>${Object.entries(rd).sort().reverse().slice(0,7).map(([k,v])=>`<tr><td>${k}</td><td>${v.ids}</td><td>${v.n}</td></tr>`).join('')||'<tr><td colspan=3>No responses yet</td></tr>'}</table></div></div>`;
- const by={};R.forEach(r=>by[r]=0);let none=0,ok=0;rs.forEach(r=>r.reason?by[r.reason]=(by[r.reason]||0)+1:isUp(r)?ok++:none++);
- if(isA()){const{data}=await sb.from('profiles').select('id').eq('role','team_lead');
-  c=[[data?.length||0,'Total Team Leads'],[act.length,'Total Files'],[rs.length,'Total IDs'],[act.filter(f=>f.assignment_date===T).length,'Files Received Today'],[act.filter(f=>f.st!=='Completed').length,'Files Pending Updates'],[act.filter(f=>f.st==='Completed').length,'Files Completed']]}
- else c=[[act.length,'Total Files'],[rs.length,'Total IDs Assigned'],[act.filter(f=>!f.today).length,'Files Pending Update Today'],[act.filter(f=>f.today).length,'Files Updated Today']];
- let ex='';if(isA()){const d={};act.forEach(f=>d[f.assignment_date]=(d[f.assignment_date]||0)+1);
-  ex=`<div class="panel"><b>Files received per day (latest 7)</b><div class="tw"><table><tr><th>Date</th><th>Files</th></tr>${Object.entries(d).sort().reverse().slice(0,7).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan=2>No data</td></tr>'}</table></div></div>`}
- $('#main').innerHTML=hdr('Dashboard',isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+
- `${hero}<div class="cards">${c.map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
- <div class="panel"><b>IDs by status</b><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${ok}</b><span>OK (no issue)</span></div><div class="card"><b>${none}</b><span>Not updated yet</span></div></div></div>${respPanel}${ex}
- <h3>Recently updated files</h3><div class="panel"><div class="tw">${ftable([...act].filter(f=>f.last).sort((a,b)=>b.last.localeCompare(a.last)).slice(0,5))}</div></div>`}
+let DF={user:'',range:'today'},PPL=[];
+const R2=[['today','Today'],['yesterday','Yesterday'],['week','Last 7 Days'],['month','This Month'],['all','All Time']];
+const respN=r=>{const m=String(r.remarks||'').match(/\d+/);return m?parseInt(m[0],10):0};
+const dRange=k=>{const T=today(),[y,m,d]=T.split('-').map(Number),add=n=>new Date(y,m-1,d+n).toLocaleDateString('en-CA');
+ return k==='today'?[T,T]:k==='yesterday'?[add(-1),add(-1)]:k==='week'?[add(-6),T]:k==='month'?[T.slice(0,7)+'-01',T.slice(0,7)+'-31']:['0000-00-00','9999-99-99']};
+async function pDash(){
+ if(me.role!=='member'){const{data}=await sb.from('profiles').select('id,full_name,email,role').neq('role','admin');PPL=(data||[]).filter(p=>p.id!==me.id)}else PPL=[];
+ const hh=new Date().getHours(),nm=p=>p.full_name||p.email,tls=PPL.filter(p=>p.role==='team_lead'),ms=PPL.filter(p=>p.role==='member');
+ const hero=`<div class="hero"><small>WORKSPACE OVERVIEW</small><h2>${hh<12?'Good morning':hh<18?'Good afternoon':'Good evening'}, ${esc(me.full_name||me.email.split('@')[0])} 👋</h2><p>${isA()?'Everything across all Team Leads at a glance.':'Your files and daily updates at a glance.'} Work day: <b>${today()}</b> (changes at ${DAY_START}:00 AM)</p></div>`;
+ const opt=a=>a.map(p=>`<option value="${p.id}" ${DF.user===p.id?'selected':''}>${esc(nm(p))}</option>`).join('');
+ const uf=me.role==='member'?'':`<div><label>User</label><select id="duser"><option value="">All Users</option>${isA()?`<optgroup label="Team Leads">${opt(tls)}</optgroup>`:''}<optgroup label="Members">${opt(ms)}</optgroup></select></div>`;
+ $('#main').innerHTML=hdr('Dashboard',isTL()?'<button class="btn" onclick="go(\'add\')">+ Add New File</button>':'')+hero+
+ `<div class="panel"><div class="bar" style="align-items:flex-end">${uf}<div><label>Date Filter</label><select id="drange">${R2.map(([k,l])=>`<option value="${k}" ${DF.range===k?'selected':''}>${l}</option>`).join('')}</select></div><button class="btn" style="flex:0 0 auto;min-width:0" onclick="applyDF()">Apply Filter</button></div></div>
+ <div id="dstats"></div><h3>Recently updated files</h3><div class="panel"><div class="tw">${ftable([...files].filter(f=>f.last).sort((a,b)=>b.last.localeCompare(a.last)).slice(0,5))}</div></div>`;
+ dstats()}
+function applyDF(){DF.user=$('#duser')?$('#duser').value:'';DF.range=$('#drange').value;dstats()}
+function dstats(){const[a,b]=dRange(DF.range),inR=d=>d>=a&&d<=b,sel=PPL.find(p=>p.id===DF.user),nm=p=>p.full_name||p.email;
+ let recs=files.flatMap(f=>f.id_records.map(r=>({f,r})));
+ if(sel)recs=sel.role==='member'?recs.filter(x=>x.r.assigned_member_id===sel.id):recs.filter(x=>x.f.team_lead_id===sel.id);
+ const asg=recs.filter(x=>inR(x.f.assignment_date)),upd=recs.filter(x=>isUp(x.r)&&x.r.last_updated&&inR(ld(x.r.last_updated))),dist=l=>new Set(l.map(x=>x.f.id)).size;
+ const by={};R.forEach(r=>by[r]=0);let ok=0;upd.forEach(x=>{x.r.reason?by[x.r.reason]=(by[x.r.reason]||0)+1:ok++});
+ const resp=upd.filter(x=>respN(x.r)>0),rd={};resp.forEach(x=>{const d=ld(x.r.last_updated),o=rd[d]||(rd[d]={ids:0,n:0});o.ids++;o.n+=respN(x.r)});
+ const c=[...(isA()?[[PPL.filter(p=>p.role==='team_lead').length,'Total Team Leads']]:[]),[dist(asg),'Files Assigned'],[asg.length,'IDs Assigned'],[dist(upd),'Files Updated'],[upd.length,'IDs Updated'],[asg.filter(x=>!isUp(x.r)).length,'IDs Pending']];
+ const lab=R2.find(x=>x[0]===DF.range)[1];
+ $('#dstats').innerHTML=`<p style="color:var(--mu);margin:0 0 10px">Showing: <b>${lab}</b>${sel?' · '+esc(nm(sel)):''}${DF.range==='all'?'':' ('+(a===b?a:(DF.range==='month'?a.slice(0,7):a+' to '+b))+')'}</p>
+ <div class="cards">${c.map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
+ <div class="panel"><b>IDs by status</b> <span style="color:var(--mu)">(IDs updated in this period)</span><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${ok}</b><span>OK (no issue)</span></div></div></div>
+ <div class="panel"><b>Responses</b><div class="cards" style="margin:10px 0">${[[resp.reduce((t,x)=>t+respN(x.r),0),'Total responses'],[resp.length,'IDs with response']].map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div><div class="tw"><table><tr><th>Date</th><th>IDs with response</th><th>Total responses</th></tr>${Object.entries(rd).sort().reverse().slice(0,10).map(([k,v])=>`<tr><td>${k}</td><td>${v.ids}</td><td>${v.n}</td></tr>`).join('')||'<tr><td colspan=3>No responses in this period</td></tr>'}</table></div></div>`}
 // ---- files
 function ftable(list){if(!list.length)return'<div class="empty">No files found.</div>';
  const th=(k,l)=>`<th onclick="sortBy('${k}')">${l}${S.sort===k?(S.dir>0?' ▲':' ▼'):''}</th>`;
