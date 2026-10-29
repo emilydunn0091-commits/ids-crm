@@ -60,7 +60,7 @@ h3{font-size:16px;font-weight:800;margin:20px 0 10px}
 <div id="modal"><div id="mbody"></div></div><div id="toasts"></div>
 <script>
 const C=window.APP_CONFIG,sb=supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY);
-const R=['Wrong Pass','Already Suspend','Suspend Working','Name Issue','Email','1st Reach Marketplace','Confirm Identity','Other'];
+const R=['Wrong Pass','Already Suspend','Suspend Working','Marketplace Suspend','Name Issue','Email','1st Reach Marketplace','Confirm Identity','Other'];
 let me=null,files=[],view='dash',S={page:1,sort:'created_at',dir:-1,q:'',from:'',to:'',tl:'',st:'',kind:''},RP={from:'',to:'',tl:''},RC=[],RF={q:'',reason:'',tl:'',from:'',to:''};
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DAY_START=6,ld=d=>new Date(new Date(d).getTime()-DAY_START*3600000).toLocaleDateString('en-CA'),today=()=>ld(new Date()),fmt=d=>d?new Date(d).toLocaleString():'-',isA=()=>me.role==='admin';
