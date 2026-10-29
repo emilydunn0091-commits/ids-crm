@@ -184,11 +184,11 @@ async function runExcel(kd){const df=$('#xf').value,dt=$('#xt').value,tl=$('#xl'
  for(let i=0;i<ids.length;i+=40){const ch=ids.slice(i,i+40);let from=0;
   for(;;){const{data,error}=await sb.from('id_records').select('*').in('file_id',ch).order('file_id').order('person_number').range(from,from+999);
    if(error)return toast(error.message,'e');data.forEach(r=>(by[r.file_id]=by[r.file_id]||[]).push(r));if(data.length<1000)break;from+=1000}}
- const rows=[];fl.forEach(f=>{rows.push({h:1,v:[f.file_name,'UID','Password','Reason','Response']});
-  (by[f.id]||[]).forEach(r=>{const t=String(r.remarks||'').trim();rows.push({v:[kd==='portal'?'':'Person '+r.person_number,r.uid||'',r.password||'',rtxt(r),/^\d{1,9}$/.test(t)?+t:t]})})});
+ const rows=[{h:1,v:[kd==='portal'?'Portal batch':'Person','UID','Password','Reason','Response']}];fl.forEach(f=>{
+  (by[f.id]||[]).forEach(r=>{const t=String(r.remarks||'').trim();rows.push({v:[kd==='portal'?f.file_name:f.file_name+' Person '+r.person_number,r.uid||'',r.password||'',rtxt(r),/^\d{1,9}$/.test(t)?+t:t]})})});
  const name=(kd==='portal'?'portal-ids-update-':'ids-update-')+(df===dt?df:df+'_to_'+dt);
  try{await loadXL();const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Updates');
-  ws.columns=[{width:24},{width:22},{width:22},{width:24},{width:40}];
+  ws.columns=[{width:34},{width:22},{width:22},{width:24},{width:40}];
   rows.forEach(r=>{const row=ws.addRow(r.v);if(r.h){row.font={bold:true};row.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE4E0FF'}};c.border={bottom:{style:'thin',color:{argb:'FF9B8CFF'}}}})}});
   dl(new Blob([await wb.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),name+'.xlsx')
  }catch(e){const q=v=>{v=String(v??'');if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
