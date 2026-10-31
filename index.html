@@ -101,7 +101,7 @@ const IC={dash:'⌂',files:'☰',add:'＋',daily:'◷',reports:'◐',profile:'�
 function nav(){const t=me.role==='member'?[['dash','Dashboard'],['files','My Files'],['profile','Profile']]:isA()?[['dash','Dashboard'],['files','All Files'],['tls','Team Leads'],['records','ID Records'],['receivers','Receivers'],['reports','Daily & Monthly Reports'],['profile','Settings']]:
  [['dash','Dashboard'],['files','My Files'],['add','Add New File'],['members','Team Members'],['daily','Daily Updates'],['reports','Reports'],['profile','Profile']];
  $('#side').innerHTML=`<div class="brand"><b>TechVera</b><small>IDS PORTAL</small></div>`+t.map(([k,l])=>`<a data-k="${k}" onclick="go('${k}')"><i>${IC[k]}</i>${l}</a>`).join('')+`<div style="flex:1"></div><div class="me">${esc(me.full_name||me.email)}<br>${RN[me.role]}</div><a onclick="logout()"><i>↩</i>Sign out</a>`}
-async function fetchFiles(){const{data,error}=await sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email),id_records(id,reason,remarks,last_updated,assigned_member_id)').eq('archived',false).order('created_at',{ascending:false});
+async function fetchFiles(){const{data,error}=await sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email),id_records(id,reason,remarks,last_updated,assigned_member_id,person_number)').eq('archived',false).order('created_at',{ascending:false});
  if(error){toast(error.message,'e');return false}
  files=data.map(f=>{const r=f.id_records||[];f.total=r.length;f.upd=r.filter(isUp).length;f.pend=f.total-f.upd;f.last=r.reduce((m,x)=>isUp(x)&&x.last_updated&&x.last_updated>m?x.last_updated:m,'');
   f.today=r.some(x=>isUp(x)&&x.last_updated&&ld(x.last_updated)===today());f.st=f.upd===0?'Pending':f.pend===0?'Completed':'In-Progress';f.tlname=f.tl?.full_name||f.tl?.email||'-';return f});return true}
@@ -115,7 +115,9 @@ const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" oncli
 // ---- dashboard
 let DF={user:'',range:'today'},PPL=[];
 const R2=[['today','Today'],['yesterday','Yesterday'],['week','Last 7 Days'],['month','This Month'],['all','All Time']];
-const respN=r=>{const m=String(r.remarks||'').match(/\d+/);return m?parseInt(m[0],10):0};
+const RX1=/(\d+)\s*(?:responses?|resp|replies|reply)\b/i,RX2=/(?:responses?|resp)\s*[:=-]?\s*(\d+)/i;
+const respN=r=>{const t=String(r.remarks||''),m=t.match(RX1)||t.match(RX2);if(m)return parseInt(m[1],10);const a=t.match(/\d+/g)||[];return a.length===1?parseInt(a[0],10):0};
+const respUnclear=r=>{const t=String(r.remarks||'');return !(RX1.test(t)||RX2.test(t))&&(t.match(/\d+/g)||[]).length>1};
 const dRange=k=>{const T=today(),[y,m,d]=T.split('-').map(Number),add=n=>new Date(y,m-1,d+n).toLocaleDateString('en-CA');
  return k==='today'?[T,T]:k==='yesterday'?[add(-1),add(-1)]:k==='week'?[add(-6),T]:k==='month'?[T.slice(0,7)+'-01',T.slice(0,7)+'-31']:['0000-00-00','9999-99-99']};
 async function pDash(){
@@ -137,10 +139,12 @@ function dstats(){const[a,b]=dRange(DF.range),inR=d=>d>=a&&d<=b,sel=PPL.find(p=>
  const resp=upd.filter(x=>respN(x.r)>0),rd={};resp.forEach(x=>{const d=ld(x.r.last_updated),o=rd[d]||(rd[d]={ids:0,n:0});o.ids++;o.n+=respN(x.r)});
  const c=[...(isA()?[[PPL.filter(p=>p.role==='team_lead').length,'Total Team Leads']]:[]),[dist(asg),'Files Assigned'],[asg.length,'IDs Assigned'],[dist(upd),'Files Updated'],[upd.length,'IDs Updated'],[asg.filter(x=>!isUp(x.r)).length,'IDs Pending']];
  const lab=R2.find(x=>x[0]===DF.range)[1];
+ const dl2=upd.filter(x=>String(x.r.remarks||'').trim()&&(respN(x.r)>0||respUnclear(x.r))).slice(0,150),unc=upd.filter(x=>respUnclear(x.r)).length;
+ const det=dl2.length?`${unc?`<p style="color:var(--wa);margin:8px 0 0">⚠ ${unc} ID(s) have several numbers in Response and were not counted. Check them below.</p>`:''}<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">See how each response was counted</summary><div class="tw"><table><tr><th>File</th><th>Response text</th><th>Counted</th></tr>${dl2.map(x=>`<tr><td>${esc(x.f.file_name)}${x.f.kind==='portal'?'':' Person '+x.r.person_number}</td><td>${esc(x.r.remarks)}</td><td>${respUnclear(x.r)?'⚠ not counted':respN(x.r)}</td></tr>`).join('')}</table></div></details>`:'';
  $('#dstats').innerHTML=`<p style="color:var(--mu);margin:0 0 10px">Showing: <b>${lab}</b>${sel?' · '+esc(nm(sel)):''}${DF.range==='all'?'':' ('+(a===b?a:(DF.range==='month'?a.slice(0,7):a+' to '+b))+')'}</p>
  <div class="cards">${c.map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
  <div class="panel"><b>IDs by status</b> <span style="color:var(--mu)">(IDs updated in this period)</span><div class="cards" style="margin:10px 0 0">${Object.entries(by).map(([k,v])=>`<div class="card"><b>${v}</b><span>${k}</span></div>`).join('')}<div class="card"><b>${ok}</b><span>OK (no issue)</span></div></div></div>
- <div class="panel"><b>Responses</b><div class="cards" style="margin:10px 0">${[[resp.reduce((t,x)=>t+respN(x.r),0),'Total responses'],[resp.length,'IDs with response']].map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div><div class="tw"><table><tr><th>Date</th><th>IDs with response</th><th>Total responses</th></tr>${Object.entries(rd).sort().reverse().slice(0,10).map(([k,v])=>`<tr><td>${k}</td><td>${v.ids}</td><td>${v.n}</td></tr>`).join('')||'<tr><td colspan=3>No responses in this period</td></tr>'}</table></div></div>`}
+ <div class="panel"><b>Responses</b><div class="cards" style="margin:10px 0">${[[resp.reduce((t,x)=>t+respN(x.r),0),'Total responses'],[resp.length,'IDs with response']].map(([n,l])=>`<div class="card"><b>${n}</b><span>${l}</span></div>`).join('')}</div><div class="tw"><table><tr><th>Date</th><th>IDs with response</th><th>Total responses</th></tr>${Object.entries(rd).sort().reverse().slice(0,10).map(([k,v])=>`<tr><td>${k}</td><td>${v.ids}</td><td>${v.n}</td></tr>`).join('')||'<tr><td colspan=3>No responses in this period</td></tr>'}</table></div>${det}</div>`}
 // ---- files
 function ftable(list){if(!list.length)return'<div class="empty">No files found.</div>';
  const th=(k,l)=>`<th onclick="sortBy('${k}')">${l}${S.sort===k?(S.dir>0?' ▲':' ▼'):''}</th>`;
