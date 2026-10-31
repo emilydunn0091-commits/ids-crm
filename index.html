@@ -119,8 +119,9 @@ const hdr=(t,x='')=>`<div class="top"><div><button class="btn s" id="menu" oncli
 let DF={user:'',range:'today'},PPL=[];
 const R2=[['today','Today'],['yesterday','Yesterday'],['week','Last 7 Days'],['month','This Month'],['all','All Time']];
 const RX1=/(\d+)\s*(?:responses?|resp|replies|reply)\b/i,RX2=/(?:responses?|resp)\s*[:=-]?\s*(\d+)/i;
-const respN=r=>{const t=String(r.remarks||''),m=t.match(RX1)||t.match(RX2);if(m)return parseInt(m[1],10);const a=t.match(/\d+/g)||[];return a.length===1?parseInt(a[0],10):0};
-const respUnclear=r=>{const t=String(r.remarks||'');return !(RX1.test(t)||RX2.test(t))&&(t.match(/\d+/g)||[]).length>1};
+const noLead=t=>String(t||'').replace(/(\d+)\s*leads?\b|\bleads?\s*[:=-]?\s*(\d+)/gi,' ');
+const respN=r=>{const t=noLead(r.remarks),m=t.match(RX1)||t.match(RX2);if(m)return parseInt(m[1],10);const a=t.match(/\d+/g)||[];return a.length===1?parseInt(a[0],10):0};
+const respUnclear=r=>{const t=noLead(r.remarks);return !(RX1.test(t)||RX2.test(t))&&(t.match(/\d+/g)||[]).length>1};
 const dRange=k=>{const T=today(),[y,m,d]=T.split('-').map(Number),add=n=>new Date(y,m-1,d+n).toLocaleDateString('en-CA');
  return k==='today'?[T,T]:k==='yesterday'?[add(-1),add(-1)]:k==='week'?[add(-6),T]:k==='month'?[T.slice(0,7)+'-01',T.slice(0,7)+'-31']:['0000-00-00','9999-99-99']};
 async function pDash(){
