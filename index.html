@@ -104,11 +104,23 @@ const IC={dash:'⌂',files:'☰',add:'＋',daily:'◷',reports:'◐',profile:'�
 function nav(){const t=me.role==='member'?[['dash','Dashboard'],['files','My Files'],['profile','Profile']]:isA()?[['dash','Dashboard'],['files','All Files'],['tls','Team Leads'],['records','ID Records'],['receivers','Receivers'],['reports','Daily & Monthly Reports'],['profile','Settings']]:
  [['dash','Dashboard'],['files','My Files'],['add','Add New File'],['members','Team Members'],['daily','Daily Updates'],['reports','Reports'],['profile','Profile']];
  $('#side').innerHTML=`<div class="brand"><b>TechVera</b><small>IDS PORTAL</small></div>`+t.map(([k,l])=>`<a data-k="${k}" onclick="go('${k}')"><i>${IC[k]}</i>${l}</a>`).join('')+`<div style="flex:1"></div><div class="me">${esc(me.full_name||me.email)}<br>${RN[me.role]}</div><a onclick="logout()"><i>↩</i>Sign out</a>`}
-async function fetchFiles(){const{data,error}=await sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email),id_records(id,reason,remarks,last_updated,assigned_member_id,person_number)').eq('archived',false).order('created_at',{ascending:false});
- if(error){toast(error.message,'e');return false}
- files=data.map(f=>{const r=f.id_records||[];f.total=r.length;f.upd=r.filter(isUp).length;f.pend=f.total-f.upd;f.last=r.reduce((m,x)=>isUp(x)&&x.last_updated&&x.last_updated>m?x.last_updated:m,'');
-  f.today=r.some(x=>isUp(x)&&x.last_updated&&ld(x.last_updated)===today());f.st=f.upd===0?'Pending':f.pend===0?'Completed':'In-Progress';f.tlname=f.tl?.full_name||f.tl?.email||'-';return f});return true}
-async function go(v,arg){if(v==='add'&&!arg)return chooseType();view=v;curTL=null;document.querySelectorAll('#side a').forEach(a=>a.classList.toggle('on',a.dataset.k===v));$('#side').classList.remove('open');
+const withTO=(p,ms,msg)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error(msg||'Server took too long. Please retry.')),ms))]);
+async function fetchFiles(){
+ try{
+  const fr=await withTO(sb.from('files').select('*,tl:profiles!files_team_lead_id_fkey(full_name,email)').eq('archived',false).order('created_at',{ascending:false}),30000,'Files took too long to load. Please retry.');
+  if(fr.error)throw fr.error;
+  const data=fr.data,ok=new Set(data.map(f=>f.id)),by={},COLS='id,file_id,reason,remarks,last_updated,assigned_member_id,person_number';
+  const first=await withTO(sb.from('id_records').select(COLS,{count:'exact'}).order('id').range(0,999),30000,'IDs took too long to load. Please retry.');
+  if(first.error)throw first.error;
+  let rows=first.data;const tot=first.count||rows.length,jobs=[];
+  for(let from=1000;from<tot;from+=1000)jobs.push(withTO(sb.from('id_records').select(COLS).order('id').range(from,from+999),45000,'IDs took too long to load. Please retry.'));
+  for(const r of await Promise.all(jobs)){if(r.error)throw r.error;rows=rows.concat(r.data)}
+  rows.forEach(r=>{if(ok.has(r.file_id))(by[r.file_id]=by[r.file_id]||[]).push(r)});
+  files=data.map(f=>{const r=by[f.id]||[];f.id_records=r;f.total=r.length;f.upd=r.filter(isUp).length;f.pend=f.total-f.upd;f.last=r.reduce((m,x)=>isUp(x)&&x.last_updated&&x.last_updated>m?x.last_updated:m,'');
+   f.today=r.some(x=>isUp(x)&&x.last_updated&&ld(x.last_updated)===today());f.st=f.upd===0?'Pending':f.pend===0?'Completed':'In-Progress';f.tlname=f.tl?.full_name||f.tl?.email||'-';return f});return true
+ }catch(e){toast(e.message||String(e),'e');return false}}
+async function go(v,arg){try{return await go0(v,arg)}catch(e){console.error(e);$('#main').innerHTML='<div class="empty">Error: '+esc(e.message||e)+'<br><br><button class="btn" onclick="go(\''+v+'\')">Retry</button></div>'}}
+async function go0(v,arg){if(v==='add'&&!arg)return chooseType();view=v;curTL=null;document.querySelectorAll('#side a').forEach(a=>a.classList.toggle('on',a.dataset.k===v));$('#side').classList.remove('open');
  const m=$('#main');m.innerHTML='<div class="empty">Loading…</div>';
  if(v==='profile')return pProfile();if(v==='add'){if(arg==='portal')return pAddPortal();await fetchFiles();return pAdd()}
  if(v==='records')return pRecords();
