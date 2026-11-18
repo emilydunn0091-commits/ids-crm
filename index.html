@@ -83,7 +83,7 @@ async function csv(rows,name){if(!rows.length)return toast('Nothing to export','
  const H=['File Name','Team Lead','Assignment Date','Person Number','UID','Password','Reason','Response','Last Updated'];
  const q=v=>{v=String(v??'');if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
  const b=new Blob(['\ufeff'+[H,...rows.map(r=>[r.file,r.tl,r.date,r.person,r.uid,r.password,r.reason,r.remarks,r.last])].map(l=>l.map(q).join(',')).join('\r\n')],{type:'text/csv'});
- const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name+'-'+today()+'.csv';a.click();toast('Exported '+rows.length+' rows','o')}
+ dl(b,name+'-'+today()+'.csv');toast('Exported '+rows.length+' rows','o')}
 // ---- auth
 let signup=false;
 function setMode(v){signup=v;$('#fnw').style.display=v?'block':'none';$('#lbtn').textContent=v?'Create account':'Sign in';$('#pw').autocomplete=v?'new-password':'current-password';$('#lerr').textContent='';
@@ -171,7 +171,7 @@ function draw(){if(!$('#tbl'))return;const q=S.q.toLowerCase();
  l.sort((a,b)=>{const x=a[S.sort]??'',y=b[S.sort]??'';return(x>y?1:x<y?-1:0)*S.dir});
  window._fl=l;const n=Math.max(1,Math.ceil(l.length/10));S.page=Math.min(S.page,n);$('#tbl').innerHTML=ftable(l.slice((S.page-1)*10,S.page*10));
  $('#pg').innerHTML=`<span>${l.length} files</span><button class="btn s sm" ${S.page<2?'disabled':''} onclick="S.page--;draw()">Prev</button> ${S.page}/${n} <button class="btn s sm" ${S.page>=n?'disabled':''} onclick="S.page++;draw()">Next</button>`}
-const dl=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click()};
+const dl=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;document.body.append(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},1500)};
 const loadXL=()=>window.ExcelJS?Promise.resolve():new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';sc.onload=ok;sc.onerror=()=>no(new Error('Excel library blocked'));document.head.append(sc)});
 async function downloadExcel(){
  modal(`<h3 style="margin:0 0 4px;font-size:18px">Download Excel</h3><p style="color:var(--mu);margin:0 0 14px">What do you want to download?</p>
@@ -183,17 +183,37 @@ async function xlStep(kd){await loadReceivers();const tls=[...new Set(files.map(
  const dates=`<div class="g2"><div><label>From</label><input type="date" id="xf" value="${today()}"></div><div><label>To</label><input type="date" id="xt" value="${today()}"></div></div>`;
  const rcSel=`<label>Received From</label><select id="xr"><option value="">All receivers</option>${RCV.map(x=>`<option>${esc(x)}</option>`).join('')}</select>`;
  modal(`<h3 style="margin:0 0 4px;font-size:18px">${pf?'Portal IDs update':'File update'}</h3><p style="color:var(--mu);margin:0 0 6px">Dates are today by default. The file has plain-text UIDs and passwords, so store it securely.</p>${pf?tlSel+dates:dates+rcSel+tlSel}<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn s" onclick="downloadExcel()">Back</button><button class="btn" onclick="runExcel('${kd}')">Download</button></div>`)}
-async function runExcel(kd){const df=$('#xf').value,dt=$('#xt').value,tl=$('#xl').value,rc=$('#xr')?$('#xr').value:'';if(!df||!dt||df>dt)return toast('Choose a valid date range','e');closeM();
- toast('Preparing Excel…');if(!(await fetchFiles()))return;
- const fl=files.filter(f=>(!tl||f.tlname===tl)&&(f.kind||'file')===kd&&(!rc||String(f.received_from||'').trim().toLowerCase()===rc.toLowerCase())&&f.id_records.some(r=>isUp(r)&&r.last_updated&&ld(r.last_updated)>=df&&ld(r.last_updated)<=dt));
+async function runExcel(kd){const df=$('#xf').value,dt=$('#xt').value,tl=$('#xl').value,rc=$('#xr')?$('#xr').value:'';
+ if(!df||!dt||df>dt)return toast('Choose a valid date range','e');closeM();toast('Preparing Excel…');
+ // work-day boundaries (the day changes at DAY_START AM)
+ const a=new Date(df+'T00:00:00');a.setHours(DAY_START);
+ const b=new Date(dt+'T00:00:00');b.setDate(b.getDate()+1);b.setHours(DAY_START);
+ // 1) which files had updates in this range
+ const fid=new Set();
+ for(let from=0;;from+=1000){
+  const{data,error}=await sb.from('id_records').select('file_id,reason,remarks').gte('last_updated',a.toISOString()).lt('last_updated',b.toISOString()).order('id').range(from,from+999);
+  if(error)return toast(error.message,'e');
+  data.forEach(r=>{if(isUp(r))fid.add(r.file_id)});if(data.length<1000)break}
+ if(!fid.size)return toast('No files were updated in this date range','e');
+ // 2) file details + filters
+ const all=[...fid];let fl=[];
+ for(let i=0;i<all.length;i+=40){
+  const{data,error}=await sb.from('files').select('id,file_name,kind,received_from,assignment_date,created_at,tl:profiles!files_team_lead_id_fkey(full_name,email)').in('id',all.slice(i,i+40)).eq('archived',false);
+  if(error)return toast(error.message,'e');fl=fl.concat(data)}
+ fl=fl.filter(f=>(f.kind||'file')===kd&&(!tl||(f.tl?.full_name||f.tl?.email||'-')===tl)&&(!rc||String(f.received_from||'').trim().toLowerCase()===rc.toLowerCase()));
  if(!fl.length)return toast('No files were updated in this date range','e');
- fl.sort((a,b)=>(a.assignment_date+a.created_at).localeCompare(b.assignment_date+b.created_at));
+ fl.sort((x,y)=>(x.assignment_date+x.created_at).localeCompare(y.assignment_date+y.created_at));
+ // 3) all records of those files
  const ids=fl.map(f=>f.id),by={};
- for(let i=0;i<ids.length;i+=40){const ch=ids.slice(i,i+40);let from=0;
-  for(;;){const{data,error}=await sb.from('id_records').select('*').in('file_id',ch).order('file_id').order('person_number').range(from,from+999);
-   if(error)return toast(error.message,'e');data.forEach(r=>(by[r.file_id]=by[r.file_id]||[]).push(r));if(data.length<1000)break;from+=1000}}
- const rows=[{h:1,v:[kd==='portal'?'Portal batch':'Person','UID','Password','Reason','Response']}];fl.forEach(f=>{
-  (by[f.id]||[]).forEach(r=>{const t=String(r.remarks||'').trim();rows.push({v:[kd==='portal'?f.file_name:f.file_name+' Person '+r.person_number,r.uid||'',r.password||'',rtxt(r),/^\d{1,9}$/.test(t)?+t:t]})})});
+ const chunks=[];for(let i=0;i<ids.length;i+=40)chunks.push(ids.slice(i,i+40));
+ try{await Promise.all(chunks.map(async ch=>{
+  for(let from=0;;from+=1000){
+   const{data,error}=await sb.from('id_records').select('*').in('file_id',ch).order('file_id').order('person_number').range(from,from+999);
+   if(error)throw error;data.forEach(r=>(by[r.file_id]=by[r.file_id]||[]).push(r));if(data.length<1000)break}}))}
+ catch(e){return toast(e.message,'e')}
+ const rows=[{h:1,v:[kd==='portal'?'Portal batch':'Person','UID','Password','Reason','Response']}];
+ fl.forEach(f=>{(by[f.id]||[]).sort((x,y)=>x.person_number-y.person_number).forEach(r=>{const t=String(r.remarks||'').trim();
+  rows.push({v:[kd==='portal'?f.file_name:f.file_name+' Person '+r.person_number,r.uid||'',r.password||'',rtxt(r),/^\d{1,9}$/.test(t)?+t:t]})})});
  const name=(kd==='portal'?'portal-ids-update-':'ids-update-')+(df===dt?df:df+'_to_'+dt);
  try{await loadXL();const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Updates');
   ws.columns=[{width:34},{width:22},{width:22},{width:24},{width:40}];
